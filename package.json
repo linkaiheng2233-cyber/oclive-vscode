@@ -1,0 +1,121 @@
+{
+  "name": "oclive-vscode",
+  "displayName": "OCLive",
+  "description": "Chat with OCLive role packs from VS Code (kernel_server --api)",
+  "version": "0.2.0",
+  "publisher": "oclive",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onView:oclive.chatView"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "oclive.openChat",
+        "title": "OCLive: Open Chat",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "oclive.reconnectKernel",
+        "title": "OCLive: Reconnect Kernel"
+      },
+      {
+        "command": "oclive.setup",
+        "title": "OCLive: Setup"
+      },
+      {
+        "command": "oclive.selectRole",
+        "title": "OCLive: Select Role"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "oclive",
+          "title": "OCLive",
+          "icon": "$(heart)"
+        }
+      ]
+    },
+    "views": {
+      "oclive": [
+        {
+          "type": "webview",
+          "id": "oclive.chatView",
+          "name": "Chat"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "OCLive",
+      "properties": {
+        "oclive.apiPort": {
+          "type": "number",
+          "default": 8420,
+          "description": "Kernel HTTP API port (OCLIVE_API_PORT)."
+        },
+        "oclive.autoDiscover": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto-find rolesDir and kernel binary (workspace, sibling oclivenewnew, shared runtime, extension bin/)."
+        },
+        "oclive.promoteSharedKernel": {
+          "type": "boolean",
+          "default": true,
+          "description": "When a full dev/desktop kernel is found, copy it to %LOCALAPPDATA%/OCLive/runtime for other distributions."
+        },
+        "oclive.rolesDir": {
+          "type": "string",
+          "default": "",
+          "description": "Path to roles root (OCLIVE_ROLES_DIR). Empty = auto-discover on first use."
+        },
+        "oclive.roleId": {
+          "type": "string",
+          "default": "mumu",
+          "description": "Default role pack id under rolesDir."
+        },
+        "oclive.kernelBinary": {
+          "type": "string",
+          "default": "",
+          "description": "Override kernel spawn path. Empty = auto (shared runtime > dev build > extension bin/)."
+        },
+        "oclive.includeEditorContext": {
+          "type": "boolean",
+          "default": true,
+          "description": "Prepend active editor file/selection to outgoing messages."
+        },
+        "oclive.mockLlm": {
+          "type": "boolean",
+          "default": false,
+          "description": "Set OCLIVE_HTTP_API_MOCK_LLM=1 when spawning kernel (dev only)."
+        },
+        "oclive.penetration.letterEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "[Future] Append idle letters to workspace .oclive/*.md"
+        },
+        "oclive.penetration.heartVoiceEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "[Future] Append heart-voice markdown in workspace"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package",
+    "lint": "tsc -p ./ --noEmit",
+    "smoke": "node scripts/smoke.mjs",
+    "smoke:attach": "node scripts/smoke-attach.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  }
+}

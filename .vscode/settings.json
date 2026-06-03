@@ -1,0 +1,7 @@
+{
+  "oclive.rolesDir": "D:\\oclivenewnew\\roles",
+  "oclive.kernelBinary": "D:\\oclive-dev-artifacts\\oclivenewnew-cargo-target\\debug\\oclive-kernel-server.exe",
+  "oclive.mockLlm": true,
+  "oclive.apiPort": 8420,
+  "oclive.roleId": "mumu"
+}
