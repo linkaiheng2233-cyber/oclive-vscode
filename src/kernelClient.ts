@@ -1,6 +1,7 @@
 import { ChildProcess, spawn } from 'child_process';
 import * as fs from 'fs';
 import { apiBase, OcliveConfig } from './config';
+import { sharedAppDataDir } from './discovery';
 import { getEffectiveConfig } from './runtimeConfig';
 
 function cfg(): OcliveConfig {
@@ -119,6 +120,8 @@ export class KernelClient {
     if (config.rolesDir) {
       env.OCLIVE_ROLES_DIR = config.rolesDir;
     }
+    env.OCLIVE_APP_DATA = sharedAppDataDir();
+    env.OCLIVE_USE_CANONICAL_APP_DATA = '1';
     if (config.mockLlm) {
       env.OCLIVE_HTTP_API_MOCK_LLM = '1';
     }

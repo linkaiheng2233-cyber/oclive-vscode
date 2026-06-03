@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { getConfig, OcliveConfig } from './config';
-import { resolveEnvironment, type ResolvedEnvironment } from './discovery';
+import { resolveEnvironment, sharedAppDataDir, type ResolvedEnvironment } from './discovery';
 
 let cached: ResolvedEnvironment | undefined;
 
@@ -48,7 +48,7 @@ export async function applyAutoDiscovery(
     });
     if (!opts?.silent) {
       void vscode.window.showInformationMessage(
-        `OCLive 已自动配置：角色库 ${resolved.rolesDir} · 内核 [${resolved.kernelTier}]`,
+        `OCLive 已自动配置：角色库 ${resolved.rolesDir} · 数据 ${sharedAppDataDir()} · 内核 [${resolved.kernelTier}]`,
       );
     }
     return true;

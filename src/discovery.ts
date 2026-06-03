@@ -29,6 +29,12 @@ const SHARED_RUNTIME_DIR = path.join(
   'runtime',
 );
 
+export function sharedAppDataDir(): string {
+  const base =
+    process.env.LOCALAPPDATA || process.env.APPDATA || os.homedir();
+  return path.join(base, 'OCLive', 'data');
+}
+
 export function sharedKernelPath(): string {
   const name = process.platform === 'win32' ? 'oclive-kernel-server.exe' : 'oclive-kernel-server';
   return path.join(SHARED_RUNTIME_DIR, name);
