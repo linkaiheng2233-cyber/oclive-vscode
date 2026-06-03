@@ -36,6 +36,17 @@ export interface ChatFailure {
 
 export type ChatResult = ChatSuccess | ChatFailure;
 
+export interface RoleSnapshot {
+  role_id: string;
+  current_favorability: number;
+  current_emotion: string;
+  portrait_emotion: string;
+  relation_state: string;
+  personality_source: string;
+  current_scene: string | null;
+  user_presence_scene: string | null;
+}
+
 export class KernelClient {
   private spawned: ChildProcess | null = null;
   private mode: KernelMode = 'offline';
@@ -192,6 +203,31 @@ export class KernelClient {
       portraitEmotion:
         typeof body.portrait_emotion === 'string' ? body.portrait_emotion : undefined,
     };
+  }
+
+  async fetchRoleSnapshot(
+    roleId: string,
+    sceneId: string | undefined,
+    config: OcliveConfig = cfg(),
+  ): Promise<RoleSnapshot | null> {
+    if (!(await this.checkHealth(config))) {
+      return null;
+    }
+    const params = new URLSearchParams({ role_id: roleId });
+    if (sceneId) {
+      params.set('scene_id', sceneId);
+    }
+    try {
+      const res = await fetch(`${apiBase(config)}/role_snapshot?${params.toString()}`, {
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) {
+        return null;
+      }
+      return (await res.json()) as RoleSnapshot;
+    } catch {
+      return null;
+    }
   }
 
   dispose(): void {

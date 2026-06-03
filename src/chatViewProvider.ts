@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { emotionEmoji, normalizeEmotionKey } from './emotionAssets';
 import { getConfig, rolePackPath } from './config';
 import { getEffectiveConfig } from './runtimeConfig';
@@ -26,6 +27,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private portraitEmoji = '😐';
   private sending = false;
   private welcomed = false;
+  private pollTimer: ReturnType<typeof setInterval> | undefined;
+  private pollBusy = false;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -49,6 +52,47 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     });
 
     void this.bootstrap();
+    this.startRoleSnapshotPoll();
+  }
+
+  disposePoll(): void {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = undefined;
+    }
+  }
+
+  private startRoleSnapshotPoll(): void {
+    this.disposePoll();
+    this.pollTimer = setInterval(() => {
+      void this.pollRoleSnapshot();
+    }, 8000);
+  }
+
+  private async pollRoleSnapshot(): Promise<void> {
+    if (this.pollBusy || this.sending) {
+      return;
+    }
+    const config = getEffectiveConfig();
+    if (!config.rolesDir) {
+      return;
+    }
+    this.pollBusy = true;
+    try {
+      const pack = rolePackPath(config);
+      const roleId = path.basename(pack);
+      const snap = await this.kernel.fetchRoleSnapshot(roleId, SCENE_ID, config);
+      if (!snap) {
+        return;
+      }
+      const emotion = snap.portrait_emotion || snap.current_emotion || 'neutral';
+      if (emotion !== this.portraitEmotion) {
+        this.setPortraitEmotion(emotion, pack);
+        this.render();
+      }
+    } finally {
+      this.pollBusy = false;
+    }
   }
 
   async openAndFocus(): Promise<void> {

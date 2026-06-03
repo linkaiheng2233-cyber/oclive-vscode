@@ -3,6 +3,20 @@ import * as os from 'os';
 import * as path from 'path';
 import { listRoleIds } from './rolePack';
 
+/**
+ * Kernel discovery — align with Rust SSOT
+ * `oclivenewnew/crates/oclive_kernel_runtime/src/kernel_discovery.rs`
+ */
+export const PROMOTE_SCORE_THRESHOLD = 88;
+export const SCORE_ENV = 100;
+export const SCORE_DEV_FULL_DEBUG = 95;
+export const SCORE_DEV_FULL_RELEASE = 94;
+export const SCORE_DEV_HEADLESS_DEBUG = 90;
+export const SCORE_DEV_HEADLESS_RELEASE = 89;
+export const SCORE_SHARED = 88;
+export const SCORE_SETTINGS = 85;
+export const SCORE_BUNDLED = 50;
+
 export type KernelTier = 'shared' | 'dev-full' | 'dev-headless' | 'bundled' | 'settings' | 'env';
 
 export interface KernelCandidate {
@@ -129,8 +143,8 @@ function devKernelCandidates(repoRoot: string): KernelCandidate[] {
     for (const profile of ['debug', 'release'] as const) {
       const tauri = path.join(root, profile, kernelExe('oclivenewnew-tauri'));
       const headless = path.join(root, profile, kernelExe('oclive-kernel-server'));
-      const tauriScore = profile === 'debug' ? 95 : 94;
-      const headlessScore = profile === 'debug' ? 90 : 89;
+      const tauriScore = profile === 'debug' ? SCORE_DEV_FULL_DEBUG : SCORE_DEV_FULL_RELEASE;
+      const headlessScore = profile === 'debug' ? SCORE_DEV_HEADLESS_DEBUG : SCORE_DEV_HEADLESS_RELEASE;
       if (isExecutable(tauri)) {
         out.push({ binary: tauri, tier: 'dev-full', score: tauriScore, extraArgs: ['--api'] });
       }
@@ -150,16 +164,16 @@ export function discoverKernelCandidates(
 
   const fromEnv = (process.env.OCLIVE_KERNEL_BINARY ?? '').trim();
   if (fromEnv && isExecutable(fromEnv)) {
-    candidates.push({ binary: fromEnv, tier: 'env', score: 100 });
+    candidates.push({ binary: fromEnv, tier: 'env', score: SCORE_ENV });
   }
 
   if (settingsBinary && isExecutable(settingsBinary)) {
-    candidates.push({ binary: settingsBinary, tier: 'settings', score: 85 });
+    candidates.push({ binary: settingsBinary, tier: 'settings', score: SCORE_SETTINGS });
   }
 
   const shared = sharedKernelPath();
   if (isExecutable(shared)) {
-    candidates.push({ binary: shared, tier: 'shared', score: 88 });
+    candidates.push({ binary: shared, tier: 'shared', score: SCORE_SHARED });
   }
 
   const bundled = path.join(
@@ -168,7 +182,7 @@ export function discoverKernelCandidates(
     process.platform === 'win32' ? 'oclive-kernel-server.exe' : 'oclive-kernel-server',
   );
   if (isExecutable(bundled)) {
-    candidates.push({ binary: bundled, tier: 'bundled', score: 50 });
+    candidates.push({ binary: bundled, tier: 'bundled', score: SCORE_BUNDLED });
   }
 
   const repo = findOclivenewnewRoot([extensionPath, process.cwd()]);
@@ -235,7 +249,7 @@ export function resolveEnvironment(opts: {
 
     if (
       opts.promoteShared !== false &&
-      best.score >= 88 &&
+      best.score >= PROMOTE_SCORE_THRESHOLD &&
       best.tier !== 'shared' &&
       best.tier !== 'bundled'
     ) {
