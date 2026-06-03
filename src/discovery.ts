@@ -200,6 +200,24 @@ export function discoverKernelCandidates(
   return [...byPath.values()].sort((a, b) => b.score - a.score);
 }
 
+function isHeadlessKernelBinary(binary: string, tier: KernelTier): boolean {
+  if (tier === 'env') {
+    return true;
+  }
+  const base = path.basename(binary).toLowerCase();
+  return base.includes('oclive-kernel-server') || base.includes('kernel-server');
+}
+
+/** Spawn-safe list (never the desktop Tauri host). */
+export function discoverSpawnKernelCandidates(
+  extensionPath: string,
+  settingsBinary?: string,
+): KernelCandidate[] {
+  return discoverKernelCandidates(extensionPath, settingsBinary).filter((c) =>
+    isHeadlessKernelBinary(c.binary, c.tier),
+  );
+}
+
 export function pickBestKernel(candidates: KernelCandidate[]): KernelCandidate | undefined {
   return candidates[0];
 }
@@ -236,7 +254,7 @@ export function resolveEnvironment(opts: {
     return undefined;
   }
 
-  const candidates = discoverKernelCandidates(opts.extensionPath, opts.settingsKernelBinary);
+  const candidates = discoverSpawnKernelCandidates(opts.extensionPath, opts.settingsKernelBinary);
   const best = pickBestKernel(candidates);
 
   let kernelBinary = '';
