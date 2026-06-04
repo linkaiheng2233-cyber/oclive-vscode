@@ -3,6 +3,11 @@ import { getConfig, OcliveConfig } from './config';
 import { resolveEnvironment, sharedAppDataDir, type ResolvedEnvironment } from './discovery';
 
 let cached: ResolvedEnvironment | undefined;
+let extensionPath: string | undefined;
+
+export function setExtensionPath(path: string): void {
+  extensionPath = path;
+}
 
 export function getResolvedEnvironment(): ResolvedEnvironment | undefined {
   return cached;
@@ -91,13 +96,14 @@ async function manualPick(cfg: vscode.WorkspaceConfiguration): Promise<boolean> 
 
 export function getEffectiveConfig(): OcliveConfig {
   const base = getConfig();
+  const withExt = extensionPath ? { ...base, extensionPath } : base;
   if (cached?.rolesDir) {
     return {
-      ...base,
+      ...withExt,
       rolesDir: cached.rolesDir,
       kernelBinary: cached.kernelBinary || base.kernelBinary,
       kernelFallbackBinary: cached.kernelFallbackBinary,
     };
   }
-  return base;
+  return withExt;
 }

@@ -1,5 +1,6 @@
 import { ChildProcess, spawn } from 'child_process';
 import * as fs from 'fs';
+import * as path from 'path';
 import { apiBase, OcliveConfig } from './config';
 import { sharedAppDataDir } from './discovery';
 import { getEffectiveConfig } from './runtimeConfig';
@@ -136,6 +137,8 @@ export class KernelClient {
     if (config.mockLlm) {
       env.OCLIVE_HTTP_API_MOCK_LLM = '1';
     }
+    const distro = distroSpawnEnv(config.extensionPath);
+    Object.assign(env, distro);
 
     const args = ['--api', '--port', String(config.apiPort)];
     this.spawned = spawn(config.kernelBinary, args, {
@@ -253,4 +256,19 @@ function spawnCandidates(config: OcliveConfig): string[] {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** P4: pass distro capability profile to spawned kernel (see `distro.oclive.toml`). */
+function distroSpawnEnv(extensionPath?: string): Record<string, string> {
+  if (!extensionPath) {
+    return {};
+  }
+  const profile = path.join(extensionPath, 'distro.oclive.toml');
+  if (!fs.existsSync(profile)) {
+    return {};
+  }
+  return {
+    OCLIVE_DISTRO_ID: 'vscode',
+    OCLIVE_DISTRO_PROFILE: profile,
+  };
 }

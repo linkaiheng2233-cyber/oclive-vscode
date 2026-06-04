@@ -54,6 +54,88 @@ export function sharedKernelPath(): string {
   return path.join(SHARED_RUNTIME_DIR, name);
 }
 
+const MANIFEST_NAME = 'oclive-kernel-server.oclive-manifest.json';
+const MAX_RUNTIME_BACKUPS = 3;
+
+interface KernelBinaryManifest {
+  version: string;
+  buildProfile: string;
+  builtAt: string;
+}
+
+function readManifestSidecar(binary: string): KernelBinaryManifest | undefined {
+  const sidecar = path.join(path.dirname(binary), MANIFEST_NAME);
+  try {
+    return JSON.parse(fs.readFileSync(sidecar, 'utf8')) as KernelBinaryManifest;
+  } catch {
+    return undefined;
+  }
+}
+
+function semverCmp(a: string, b: string): number {
+  const pa = a.split('.').map((x) => parseInt(x, 10) || 0);
+  const pb = b.split('.').map((x) => parseInt(x, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const da = pa[i] ?? 0;
+    const db = pb[i] ?? 0;
+    if (da !== db) {
+      return da > db ? 1 : -1;
+    }
+  }
+  return 0;
+}
+
+function shouldPromoteBinary(candidate: string): boolean {
+  const shared = sharedKernelPath();
+  if (!fs.existsSync(shared)) {
+    return true;
+  }
+  const candM = readManifestSidecar(candidate);
+  if (!candM) {
+    return true;
+  }
+  const sharedM = readManifestSidecar(shared);
+  if (!sharedM) {
+    return true;
+  }
+  const cmp = semverCmp(candM.version, sharedM.version);
+  if (cmp > 0) {
+    return true;
+  }
+  if (cmp < 0) {
+    return false;
+  }
+  return candM.builtAt > sharedM.builtAt;
+}
+
+function backupCurrentShared(): void {
+  const shared = sharedKernelPath();
+  if (!fs.existsSync(shared)) {
+    return;
+  }
+  const backupsRoot = path.join(SHARED_RUNTIME_DIR, 'backups');
+  fs.mkdirSync(backupsRoot, { recursive: true });
+  const dir = path.join(backupsRoot, String(Math.floor(Date.now() / 1000)));
+  fs.mkdirSync(dir, { recursive: true });
+  const name = path.basename(shared);
+  fs.copyFileSync(shared, path.join(dir, name));
+  const sidecar = path.join(SHARED_RUNTIME_DIR, MANIFEST_NAME);
+  if (fs.existsSync(sidecar)) {
+    fs.copyFileSync(sidecar, path.join(dir, MANIFEST_NAME));
+  }
+  const dirs = fs
+    .readdirSync(backupsRoot)
+    .map((d) => path.join(backupsRoot, d))
+    .filter((p) => fs.statSync(p).isDirectory())
+    .sort((a, b) => path.basename(b).localeCompare(path.basename(a)));
+  while (dirs.length > MAX_RUNTIME_BACKUPS) {
+    const old = dirs.pop();
+    if (old) {
+      fs.rmSync(old, { recursive: true, force: true });
+    }
+  }
+}
+
 function isExecutable(p: string): boolean {
   try {
     return fs.existsSync(p) && fs.statSync(p).isFile();
@@ -222,15 +304,26 @@ export function pickBestKernel(candidates: KernelCandidate[]): KernelCandidate |
   return candidates[0];
 }
 
-/** Copy best dev/shared-quality binary into shared runtime dir for other distributions. */
+/** Copy best dev/shared-quality binary into shared runtime dir (backup + manifest sidecar, P3a). */
 export function promoteToSharedRuntime(binary: string): string | undefined {
   try {
-    fs.mkdirSync(SHARED_RUNTIME_DIR, { recursive: true });
     const dest = sharedKernelPath();
     if (path.resolve(binary) === path.resolve(dest)) {
       return dest;
     }
+    if (!shouldPromoteBinary(binary)) {
+      return dest;
+    }
+    fs.mkdirSync(SHARED_RUNTIME_DIR, { recursive: true });
+    backupCurrentShared();
     fs.copyFileSync(binary, dest);
+    const candM = readManifestSidecar(binary);
+    if (candM) {
+      fs.writeFileSync(
+        path.join(SHARED_RUNTIME_DIR, MANIFEST_NAME),
+        JSON.stringify(candM, null, 2),
+      );
+    }
     return dest;
   } catch {
     return undefined;

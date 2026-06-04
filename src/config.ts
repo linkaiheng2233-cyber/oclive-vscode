@@ -6,6 +6,8 @@ export interface OcliveConfig {
   rolesDir: string;
   roleId: string;
   kernelBinary: string;
+  /** VS Code extension root (`context.extensionPath`) for `distro.oclive.toml`. */
+  extensionPath?: string;
   /** Spawn retry when primary kernel fails (extension `bin/`). */
   kernelFallbackBinary?: string;
   includeEditorContext: boolean;

@@ -2,7 +2,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { ChatViewProvider } from './chatViewProvider';
 import { getConfig, rolePackPath } from './config';
-import { applyAutoDiscovery, getEffectiveConfig } from './runtimeConfig';
+import { applyAutoDiscovery, getEffectiveConfig, setExtensionPath } from './runtimeConfig';
 import { KernelClient } from './kernelClient';
 import { listRoleIds, readRoleDisplayName } from './rolePack';
 import { ensureSetup } from './setup';
@@ -23,6 +23,7 @@ async function refreshKernelUi(): Promise<void> {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
+  setExtensionPath(context.extensionPath);
   kernel = new KernelClient();
   statusBar = new KernelStatusBar(kernel);
   chatProvider = new ChatViewProvider(context.extensionUri, kernel, context, statusBar);

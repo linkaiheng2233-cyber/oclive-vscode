@@ -1,0 +1,29 @@
+# Shipped with the VS Code extension (mirror of oclivenewnew/examples/distro-profiles/vscode.oclive.toml)
+# See oclivenewnew/creator-docs/kernel/DISTRO_CAPABILITY_PROFILE.md
+
+schema_version = 1
+distro_id = "vscode"
+display_name = "OCLive VS Code"
+
+[host_flags]
+skip_agent = true
+skip_complex_emotion = true
+
+[slots]
+complex_emotion = "off"
+
+[prompt]
+profile = "concise"
+
+[memory]
+retrieval = "light"
+
+[post_process]
+chain = "minimal"
+
+[plugin_backends]
+memory = "builtin"
+emotion = "builtin"
+event = "builtin"
+prompt = "builtin"
+llm = "ollama"
