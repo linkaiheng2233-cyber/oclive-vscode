@@ -9,7 +9,7 @@
     "vscode": "^1.85.0"
   },
   "categories": ["Other"],
-  "activationEvents": ["onView:oclive.chatView"],
+  "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
