@@ -48,6 +48,29 @@ export interface RoleSnapshot {
   user_presence_scene: string | null;
 }
 
+export const OCLIVE_DEFAULT_IDENTITY_SENTINEL = '__oclive_default__';
+
+export interface UserIdentityDto {
+  id: string;
+  display_name: string;
+  maps_to_relation_id?: string | null;
+}
+
+export interface UserIdentityStateResponse {
+  role_id: string;
+  identities: UserIdentityDto[];
+  default_identity_id: string;
+  current_identity_id: string;
+  use_manifest_default: boolean;
+  effective_relation_key: string;
+}
+
+export interface RoleInfoSummary {
+  reply_post_processor_enabled?: boolean;
+  reply_post_processor_backend?: string;
+  reply_post_processor_profile?: string | null;
+}
+
 export class KernelClient {
   private spawned: ChildProcess | null = null;
   private mode: KernelMode = 'offline';
@@ -228,6 +251,72 @@ export class KernelClient {
         return null;
       }
       return (await res.json()) as RoleSnapshot;
+    } catch {
+      return null;
+    }
+  }
+
+  async fetchRoleInfo(
+    roleId: string,
+    config: OcliveConfig = cfg(),
+  ): Promise<RoleInfoSummary | null> {
+    if (!(await this.checkHealth(config))) {
+      return null;
+    }
+    const params = new URLSearchParams({ role_id: roleId });
+    try {
+      const res = await fetch(`${apiBase(config)}/role_info?${params.toString()}`, {
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) {
+        return null;
+      }
+      return (await res.json()) as RoleInfoSummary;
+    } catch {
+      return null;
+    }
+  }
+
+  async getUserIdentityState(
+    roleId: string,
+    sceneId?: string,
+    config: OcliveConfig = cfg(),
+  ): Promise<UserIdentityStateResponse | null> {
+    await this.ensureReady(config);
+    const params = new URLSearchParams({ role_id: roleId });
+    if (sceneId) {
+      params.set('scene_id', sceneId);
+    }
+    try {
+      const res = await fetch(`${apiBase(config)}/user_identity/state?${params.toString()}`, {
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) {
+        return null;
+      }
+      return (await res.json()) as UserIdentityStateResponse;
+    } catch {
+      return null;
+    }
+  }
+
+  async setUserIdentity(
+    roleId: string,
+    identityId: string,
+    config: OcliveConfig = cfg(),
+  ): Promise<UserIdentityStateResponse | null> {
+    await this.ensureReady(config);
+    try {
+      const res = await fetch(`${apiBase(config)}/user_identity/set`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ role_id: roleId, identity_id: identityId }),
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) {
+        return null;
+      }
+      return (await res.json()) as UserIdentityStateResponse;
     } catch {
       return null;
     }

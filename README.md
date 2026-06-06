@@ -23,6 +23,7 @@ When a **full** dev/desktop binary is found and `oclive.promoteSharedKernel` is 
 - Health fails → spawn best binary with `--api --port 8420` (primary, then bundled fallback).
 - Chat uses **`scene_id=vscode`**, own **`session_id`**, demo role **`mumu`**.
 - Sidebar: portrait from `roles/{id}/assets/images/` + chat; welcome from `scenes/vscode/scene.json`.
+- **User identity**: command **OCLive: Select User Identity** (or tag in chat webview); status bar second item shows identity + reply post-processor state from `GET /role_info`.
 
 ## Commands
 
@@ -31,6 +32,7 @@ When a **full** dev/desktop binary is found and `oclive.promoteSharedKernel` is 
 | **OCLive: Open Chat** | Focus sidebar |
 | **OCLive: Setup** | Re-run auto-discovery (or manual pick if nothing found) |
 | **OCLive: Select Role** | Pick role folder under `rolesDir` |
+| **OCLive: Select User Identity** | Switch User Identity Prompt Template when `user_identities/` exists |
 | **OCLive: Reconnect Kernel** | Refresh attach/spawn |
 
 Roadmap: [ROADMAP.md](./ROADMAP.md).
@@ -71,4 +73,4 @@ npm run smoke:attach   # with kernel already on 8420
 | `oclive.includeEditorContext` | `true` | File/selection prefix |
 | `oclive.mockLlm` | `false` | Mock LLM when spawning |
 
-Status bar: **attach / spawn / offline**.
+Status bar: **attach / spawn / offline**; when a role is loaded, a second item shows **identity · post-process** (read-only).

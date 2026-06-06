@@ -2,7 +2,7 @@
   "name": "oclive-vscode",
   "displayName": "OCLive",
   "description": "Chat with OCLive role packs from VS Code (kernel_server --api)",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "oclive",
   "license": "MIT",
   "engines": {
@@ -29,6 +29,10 @@
       {
         "command": "oclive.selectRole",
         "title": "OCLive: Select Role"
+      },
+      {
+        "command": "oclive.selectUserIdentity",
+        "title": "OCLive: Select User Identity"
       }
     ],
     "viewsContainers": {

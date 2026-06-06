@@ -21,6 +21,9 @@ retrieval = "light"
 [post_process]
 chain = "minimal"
 
+[user_identity]
+default_id = "classmate"
+
 [plugin_backends]
 memory = "builtin"
 emotion = "builtin"

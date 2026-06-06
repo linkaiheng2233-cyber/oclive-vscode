@@ -26,6 +26,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private portraitWebviewSrc = '';
   private portraitEmoji = '😐';
   private sending = false;
+  private identityLabel = '';
   private welcomed = false;
   private pollTimer: ReturnType<typeof setInterval> | undefined;
   private pollBusy = false;
@@ -49,6 +50,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       if (msg.type === 'send' && typeof msg.text === 'string') {
         await this.handleSend(msg.text.trim());
       }
+      if (msg.type === 'selectIdentity') {
+        await vscode.commands.executeCommand('oclive.selectUserIdentity');
+        await this.refreshIdentityLabel();
+        this.render();
+      }
     });
 
     void this.bootstrap();
@@ -60,6 +66,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       clearInterval(this.pollTimer);
       this.pollTimer = undefined;
     }
+  }
+
+  /** Refresh identity label + status bar role context (after identity switch). */
+  async refreshStatusContext(): Promise<void> {
+    await this.refreshIdentityLabel();
+    this.render();
   }
 
   private startRoleSnapshotPoll(): void {
@@ -136,7 +148,49 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       }
     }
     await this.refreshKernelStatus();
+    await this.refreshIdentityLabel();
     this.render();
+  }
+
+  private async refreshIdentityLabel(): Promise<void> {
+    const config = getEffectiveConfig();
+    if (!config.rolesDir) {
+      this.identityLabel = '';
+      this.statusBar.setRoleContext(undefined);
+      return;
+    }
+    try {
+      const pack = rolePackPath(config);
+      const roleId = path.basename(pack);
+      const state = await this.kernel.getUserIdentityState(roleId, SCENE_ID, config);
+      const info = await this.kernel.fetchRoleInfo(roleId, config);
+      const parts: string[] = [];
+      if (!state?.identities?.length) {
+        this.identityLabel = '';
+      } else if (state.use_manifest_default) {
+        const name =
+          state.identities.find((i) => i.id === state.default_identity_id)?.display_name ??
+          state.default_identity_id;
+        this.identityLabel = `身份：跟随默认（${name}）`;
+        parts.push(`身份 ${name}`);
+      } else {
+        const cur = state.identities.find((i) => i.id === state.current_identity_id);
+        const label = cur?.display_name ?? state.current_identity_id;
+        this.identityLabel = `身份：${label}`;
+        parts.push(`身份 ${label}`);
+      }
+      if (info?.reply_post_processor_enabled) {
+        const backend = info.reply_post_processor_backend ?? 'builtin';
+        const profile = info.reply_post_processor_profile ?? '—';
+        parts.push(`后处理 ${backend}·${profile}`);
+      } else if (info) {
+        parts.push('后处理 off');
+      }
+      this.statusBar.setRoleContext(parts.length ? parts.join(' · ') : undefined);
+    } catch {
+      this.identityLabel = '';
+      this.statusBar.setRoleContext(undefined);
+    }
   }
 
   private sessionId(): string {
@@ -304,6 +358,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     .portrait-emoji { font-size: 56px; line-height: 1.2; display: block; }
     .role-meta { margin-top: 6px; font-size: 0.85em; opacity: 0.85; }
     .emotion-tag { font-size: 0.75em; opacity: 0.65; }
+    .identity-tag { margin-top: 4px; font-size: 0.75em; opacity: 0.8; }
+    #identity-btn { margin-left: 6px; font-size: inherit; cursor: pointer; }
     #log { flex: 1; overflow-y: auto; padding: 8px; min-height: 0; }
     .msg { padding: 6px 8px; margin-bottom: 6px; border-radius: 4px; white-space: pre-wrap; word-break: break-word; }
     .user { background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border); }
@@ -322,6 +378,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     ${portraitInner}
     <div class="role-meta">${this.escapeHtml(this.roleName || '角色')}</div>
     <div class="emotion-tag">${this.escapeHtml(this.portraitEmotion)}</div>
+    ${this.identityLabel ? `<div class="identity-tag">${this.escapeHtml(this.identityLabel)} <button type="button" id="identity-btn">切换</button></div>` : ''}
   </div>
   <div id="log">${linesHtml}${sendingHint}</div>
   <div id="footer">
@@ -341,6 +398,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       input.value = '';
     };
     sendBtn.addEventListener('click', send);
+    const identityBtn = document.getElementById('identity-btn');
+    identityBtn?.addEventListener('click', () => vscode.postMessage({ type: 'selectIdentity' }));
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
     });

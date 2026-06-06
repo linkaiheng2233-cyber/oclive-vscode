@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { ChatViewProvider } from './chatViewProvider';
 import { getConfig, rolePackPath } from './config';
 import { applyAutoDiscovery, getEffectiveConfig, setExtensionPath } from './runtimeConfig';
-import { KernelClient } from './kernelClient';
+import { KernelClient, OCLIVE_DEFAULT_IDENTITY_SENTINEL } from './kernelClient';
 import { listRoleIds, readRoleDisplayName } from './rolePack';
 import { ensureSetup } from './setup';
 import { KernelStatusBar } from './statusBar';
@@ -11,6 +11,8 @@ import { KernelStatusBar } from './statusBar';
 let kernel: KernelClient | undefined;
 let chatProvider: ChatViewProvider | undefined;
 let statusBar: KernelStatusBar | undefined;
+
+const SCENE_ID = 'vscode';
 
 async function refreshKernelUi(): Promise<void> {
   const config = getEffectiveConfig();
@@ -99,6 +101,46 @@ export function activate(context: vscode.ExtensionContext): void {
         statusBar?.syncFromClient(eff.apiPort);
         const msg = e instanceof Error ? e.message : String(e);
         void vscode.window.showErrorMessage(msg);
+      }
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('oclive.selectUserIdentity', async () => {
+      if (!(await ensureSetup(context))) {
+        return;
+      }
+      const config = getEffectiveConfig();
+      const pack = rolePackPath(config);
+      const roleId = path.basename(pack);
+      const state = await kernel?.getUserIdentityState(roleId, SCENE_ID, config);
+      if (!state?.identities?.length) {
+        void vscode.window.showInformationMessage('当前角色包未配置 user_identities/ 目录');
+        return;
+      }
+      const defaultLabel =
+        state.identities.find((i) => i.id === state.default_identity_id)?.display_name ??
+        state.default_identity_id;
+      const items = [
+        {
+          label: `跟随包默认（${defaultLabel}）`,
+          id: OCLIVE_DEFAULT_IDENTITY_SENTINEL,
+        },
+        ...state.identities.map((i) => ({
+          label: i.display_name || i.id,
+          id: i.id,
+        })),
+      ];
+      const picked = await vscode.window.showQuickPick(items, {
+        placeHolder: '选择用户身份',
+      });
+      if (!picked) {
+        return;
+      }
+      const updated = await kernel?.setUserIdentity(roleId, picked.id, config);
+      if (updated) {
+        void vscode.window.showInformationMessage(`用户身份已切换：${picked.label}`);
+        await chatProvider?.refreshStatusContext();
       }
     }),
   );
