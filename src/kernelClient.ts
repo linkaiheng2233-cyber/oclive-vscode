@@ -4,6 +4,44 @@ import * as path from 'path';
 import { apiBase, OcliveConfig } from './config';
 import { sharedAppDataDir } from './discovery';
 import { getEffectiveConfig } from './runtimeConfig';
+import type { LlmUserSettings, SaveLlmUserSettingsRequest } from './types/llmSettings';
+import type { RoleInfo } from './types/roleInfo';
+
+export interface KernelHealthJson {
+  ok: boolean;
+  runtime_api_version?: string;
+  schema_migration_version?: number | null;
+  kernel_manifest?: {
+    version?: string;
+    build_profile?: string;
+    git_commit?: string;
+  };
+}
+
+export interface SessionMeta {
+  session_id: string;
+  role_id: string;
+  scene_id: string;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
+  last_message_snippet: string;
+}
+
+export interface StoredMessage {
+  id: string;
+  session_id: string;
+  turn_index: number;
+  sender: string;
+  content: string;
+  metadata?: string | null;
+  created_at: string;
+}
+
+/** Canonical shared app data path (align with desktop OCLIVE_APP_DATA). */
+export function getSharedAppDataHint(): string {
+  return sharedAppDataDir();
+}
 
 function cfg(): OcliveConfig {
   return getEffectiveConfig();
@@ -66,10 +104,14 @@ export interface UserIdentityStateResponse {
 }
 
 export interface RoleInfoSummary {
+  identity_binding?: 'global' | 'per_scene';
   reply_post_processor_enabled?: boolean;
   reply_post_processor_backend?: string;
   reply_post_processor_profile?: string | null;
 }
+
+/** @deprecated Use {@link RoleInfo} from `./types/roleInfo`. */
+export type { RoleInfo };
 
 export class KernelClient {
   private spawned: ChildProcess | null = null;
@@ -87,10 +129,30 @@ export class KernelClient {
       if (!res.ok) {
         return false;
       }
+      const ct = res.headers.get('content-type') ?? '';
+      if (ct.includes('application/json')) {
+        const json = (await res.json()) as { ok?: boolean };
+        return json.ok === true;
+      }
       const text = (await res.text()).trim();
       return text === 'ok';
     } catch {
       return false;
+    }
+  }
+
+  async fetchHealthJson(config: OcliveConfig = cfg()): Promise<KernelHealthJson | null> {
+    try {
+      const res = await fetch(`${apiBase(config)}/health`, {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) {
+        return null;
+      }
+      return (await res.json()) as KernelHealthJson;
+    } catch {
+      return null;
     }
   }
 
@@ -259,11 +321,15 @@ export class KernelClient {
   async fetchRoleInfo(
     roleId: string,
     config: OcliveConfig = cfg(),
-  ): Promise<RoleInfoSummary | null> {
+    sessionId?: string,
+  ): Promise<RoleInfo | null> {
     if (!(await this.checkHealth(config))) {
       return null;
     }
     const params = new URLSearchParams({ role_id: roleId });
+    if (sessionId) {
+      params.set('session_id', sessionId);
+    }
     try {
       const res = await fetch(`${apiBase(config)}/role_info?${params.toString()}`, {
         signal: AbortSignal.timeout(8000),
@@ -271,9 +337,136 @@ export class KernelClient {
       if (!res.ok) {
         return null;
       }
-      return (await res.json()) as RoleInfoSummary;
+      return (await res.json()) as RoleInfo;
     } catch {
       return null;
+    }
+  }
+
+  async loadRole(roleId: string, config: OcliveConfig = cfg()): Promise<boolean> {
+    await this.ensureReady(config);
+    try {
+      const res = await fetch(`${apiBase(config)}/role/load`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ role_id: roleId }),
+        signal: AbortSignal.timeout(8000),
+      });
+      return res.ok || res.status === 204;
+    } catch {
+      return false;
+    }
+  }
+
+  async getLlmUserSettings(
+    roleId: string,
+    sessionId?: string,
+    config: OcliveConfig = cfg(),
+  ): Promise<LlmUserSettings | null> {
+    await this.ensureReady(config);
+    const params = new URLSearchParams({ role_id: roleId });
+    if (sessionId) {
+      params.set('session_id', sessionId);
+    }
+    try {
+      const res = await fetch(`${apiBase(config)}/llm/user_settings?${params.toString()}`, {
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) {
+        return null;
+      }
+      return (await res.json()) as LlmUserSettings;
+    } catch {
+      return null;
+    }
+  }
+
+  async saveLlmUserSettings(
+    req: SaveLlmUserSettingsRequest,
+    config: OcliveConfig = cfg(),
+  ): Promise<RoleInfo | null> {
+    await this.ensureReady(config);
+    try {
+      const res = await fetch(`${apiBase(config)}/llm/user_settings`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          roleId: req.roleId,
+          sessionId: req.sessionId ?? null,
+          provider: req.provider,
+          ollamaBaseUrl: req.ollamaBaseUrl,
+          ollamaModel: req.ollamaModel ?? null,
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) {
+        return null;
+      }
+      return (await res.json()) as RoleInfo;
+    } catch {
+      return null;
+    }
+  }
+
+  async listOllamaModels(
+    ollamaBaseUrl?: string,
+    config: OcliveConfig = cfg(),
+  ): Promise<string[]> {
+    await this.ensureReady(config);
+    const params = new URLSearchParams();
+    if (ollamaBaseUrl?.trim()) {
+      params.set('ollama_base_url', ollamaBaseUrl.trim());
+    }
+    const qs = params.toString();
+    const url = `${apiBase(config)}/llm/ollama_models${qs ? `?${qs}` : ''}`;
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+      if (!res.ok) {
+        return [];
+      }
+      return (await res.json()) as string[];
+    } catch {
+      return [];
+    }
+  }
+
+  async setSessionOllamaModel(
+    roleId: string,
+    model: string | null,
+    sessionId?: string,
+    config: OcliveConfig = cfg(),
+  ): Promise<RoleInfo | null> {
+    await this.ensureReady(config);
+    try {
+      const res = await fetch(`${apiBase(config)}/llm/session_model`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          roleId,
+          sessionId: sessionId ?? null,
+          model,
+        }),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) {
+        return null;
+      }
+      return (await res.json()) as RoleInfo;
+    } catch {
+      return null;
+    }
+  }
+
+  async reloadLlm(config: OcliveConfig = cfg()): Promise<boolean> {
+    await this.ensureReady(config);
+    try {
+      const res = await fetch(`${apiBase(config)}/llm/reload`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(10000),
+      });
+      return res.ok;
+    } catch {
+      return false;
     }
   }
 
@@ -300,6 +493,7 @@ export class KernelClient {
     }
   }
 
+  /** @deprecated Prefer {@link setSceneUserIdentity} when the host uses per-scene identity binding. */
   async setUserIdentity(
     roleId: string,
     identityId: string,
@@ -319,6 +513,85 @@ export class KernelClient {
       return (await res.json()) as UserIdentityStateResponse;
     } catch {
       return null;
+    }
+  }
+
+  async setSceneUserIdentity(
+    roleId: string,
+    sceneId: string,
+    identityId: string,
+    config: OcliveConfig = cfg(),
+  ): Promise<UserIdentityStateResponse | null> {
+    await this.ensureReady(config);
+    try {
+      const res = await fetch(`${apiBase(config)}/user_identity/scene_set`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          role_id: roleId,
+          scene_id: sceneId,
+          identity_id: identityId,
+        }),
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) {
+        return null;
+      }
+      return (await res.json()) as UserIdentityStateResponse;
+    } catch {
+      return null;
+    }
+  }
+
+  async listChatSessions(
+    roleId: string,
+    sceneId: string,
+    config: OcliveConfig = cfg(),
+    limit = 50,
+    offset = 0,
+  ): Promise<SessionMeta[]> {
+    await this.ensureReady(config);
+    const params = new URLSearchParams({
+      role_id: roleId,
+      scene_id: sceneId,
+      limit: String(limit),
+      offset: String(offset),
+    });
+    try {
+      const res = await fetch(`${apiBase(config)}/chat/sessions?${params.toString()}`, {
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) {
+        return [];
+      }
+      return (await res.json()) as SessionMeta[];
+    } catch {
+      return [];
+    }
+  }
+
+  async fetchChatMessages(
+    sessionId: string,
+    config: OcliveConfig = cfg(),
+    limit = 500,
+    offset = 0,
+  ): Promise<StoredMessage[]> {
+    await this.ensureReady(config);
+    const params = new URLSearchParams({
+      session_id: sessionId,
+      limit: String(limit),
+      offset: String(offset),
+    });
+    try {
+      const res = await fetch(`${apiBase(config)}/chat/messages?${params.toString()}`, {
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) {
+        return [];
+      }
+      return (await res.json()) as StoredMessage[];
+    } catch {
+      return [];
     }
   }
 

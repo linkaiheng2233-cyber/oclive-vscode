@@ -1,0 +1,41 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "tsc: watch",
+      "type": "npm",
+      "script": "watch",
+      "isBackground": true,
+      "problemMatcher": "$tsc-watch",
+      "group": "build"
+    },
+    {
+      "label": "webview: watch",
+      "type": "shell",
+      "command": "npm run build -- --watch",
+      "options": {
+        "cwd": "${workspaceFolder}/webview-ui"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "vite",
+        "pattern": { "regexp": "^.*$" },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".",
+          "endsPattern": "built in"
+        }
+      },
+      "group": "build"
+    },
+    {
+      "label": "oclive: watch all",
+      "dependsOn": ["tsc: watch", "webview: watch"],
+      "dependsOrder": "parallel",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ]
+}

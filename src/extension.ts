@@ -1,18 +1,20 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { ChatViewProvider } from './chatViewProvider';
-import { getConfig, rolePackPath } from './config';
+import { rolePackPath } from './config';
 import { applyAutoDiscovery, getEffectiveConfig, setExtensionPath } from './runtimeConfig';
-import { KernelClient, OCLIVE_DEFAULT_IDENTITY_SENTINEL } from './kernelClient';
+import { KernelClient } from './kernelClient';
 import { listRoleIds, readRoleDisplayName } from './rolePack';
 import { ensureSetup } from './setup';
+import { onSettingsChanged, setPendingSettingsSection } from './settingsEvents';
+import { SettingsViewProvider } from './settingsViewProvider';
+import type { SettingsSection } from './webviewProtocol';
 import { KernelStatusBar } from './statusBar';
 
 let kernel: KernelClient | undefined;
 let chatProvider: ChatViewProvider | undefined;
+let settingsProvider: SettingsViewProvider | undefined;
 let statusBar: KernelStatusBar | undefined;
-
-const SCENE_ID = 'vscode';
 
 async function refreshKernelUi(): Promise<void> {
   const config = getEffectiveConfig();
@@ -29,11 +31,47 @@ export function activate(context: vscode.ExtensionContext): void {
   kernel = new KernelClient();
   statusBar = new KernelStatusBar(kernel);
   chatProvider = new ChatViewProvider(context.extensionUri, kernel, context, statusBar);
+  settingsProvider = new SettingsViewProvider(
+    context.extensionUri,
+    kernel,
+    context,
+    () => chatProvider,
+    () => statusBar,
+  );
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(ChatViewProvider.viewType, chatProvider, {
       webviewOptions: { retainContextWhenHidden: true },
     }),
+  );
+
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(SettingsViewProvider.viewType, settingsProvider, {
+      webviewOptions: { retainContextWhenHidden: true },
+    }),
+  );
+
+  context.subscriptions.push(
+    onSettingsChanged(() => {
+      void chatProvider?.refreshStatusContext();
+      statusBar?.syncFromClient(getEffectiveConfig().apiPort, getEffectiveConfig().extensionPath);
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'oclive.openSettings',
+      async (section?: SettingsSection) => {
+        if (!(await ensureSetup(context))) {
+          return;
+        }
+        if (section) {
+          setPendingSettingsSection(section);
+          settingsProvider?.setInitialSection(section);
+        }
+        await settingsProvider?.focus(section);
+      },
+    ),
   );
 
   context.subscriptions.push(
@@ -107,41 +145,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('oclive.selectUserIdentity', async () => {
-      if (!(await ensureSetup(context))) {
-        return;
-      }
-      const config = getEffectiveConfig();
-      const pack = rolePackPath(config);
-      const roleId = path.basename(pack);
-      const state = await kernel?.getUserIdentityState(roleId, SCENE_ID, config);
-      if (!state?.identities?.length) {
-        void vscode.window.showInformationMessage('当前角色包未配置 user_identities/ 目录');
-        return;
-      }
-      const defaultLabel =
-        state.identities.find((i) => i.id === state.default_identity_id)?.display_name ??
-        state.default_identity_id;
-      const items = [
-        {
-          label: `跟随包默认（${defaultLabel}）`,
-          id: OCLIVE_DEFAULT_IDENTITY_SENTINEL,
-        },
-        ...state.identities.map((i) => ({
-          label: i.display_name || i.id,
-          id: i.id,
-        })),
-      ];
-      const picked = await vscode.window.showQuickPick(items, {
-        placeHolder: '选择用户身份',
-      });
-      if (!picked) {
-        return;
-      }
-      const updated = await kernel?.setUserIdentity(roleId, picked.id, config);
-      if (updated) {
-        void vscode.window.showInformationMessage(`用户身份已切换：${picked.label}`);
-        await chatProvider?.refreshStatusContext();
-      }
+      await vscode.commands.executeCommand('oclive.openSettings', 'identity');
     }),
   );
 
@@ -160,8 +164,10 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 export function deactivate(): void {
+  chatProvider?.disposePoll();
   kernel?.dispose();
   kernel = undefined;
   chatProvider = undefined;
+  settingsProvider = undefined;
   statusBar = undefined;
 }

@@ -33,6 +33,11 @@
       {
         "command": "oclive.selectUserIdentity",
         "title": "OCLive: Select User Identity"
+      },
+      {
+        "command": "oclive.openSettings",
+        "title": "OCLive: Open Settings",
+        "icon": "$(settings-gear)"
       }
     ],
     "viewsContainers": {
@@ -50,6 +55,11 @@
           "type": "webview",
           "id": "oclive.chatView",
           "name": "Chat"
+        },
+        {
+          "type": "webview",
+          "id": "oclive.settingsView",
+          "name": "Settings"
         }
       ]
     },
@@ -112,6 +122,9 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
+    "build:webview": "cd webview-ui && npm ci && npm run build",
+    "compile:all": "npm run build:webview && npm run compile",
+    "prepackage": "npm run compile:all",
     "package": "vsce package",
     "lint": "tsc -p ./ --noEmit",
     "smoke": "node scripts/smoke.mjs",
@@ -120,6 +133,7 @@
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.2.1",
     "typescript": "^5.4.0"
   }
 }

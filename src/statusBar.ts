@@ -1,5 +1,8 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import type { KernelClient, KernelMode } from './kernelClient';
+import { getSharedAppDataHint } from './kernelClient';
 
 const MODE_LABEL: Record<KernelMode, string> = {
   attached: '已连接（attach）',
@@ -13,24 +16,42 @@ export class KernelStatusBar {
 
   constructor(private readonly kernel: KernelClient) {
     this.kernelItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
-    this.kernelItem.command = 'oclive.reconnectKernel';
+    this.kernelItem.command = {
+      command: 'oclive.openSettings',
+      arguments: ['kernel'],
+      title: 'OCLive 内核设置',
+    };
     this.setMode('offline');
     this.kernelItem.show();
 
     this.roleItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 49);
-    this.roleItem.command = 'oclive.selectUserIdentity';
-    this.roleItem.tooltip = '用户身份与后处理状态 · 点击切换身份';
+    this.roleItem.command = {
+      command: 'oclive.openSettings',
+      arguments: ['identity'],
+      title: 'OCLive 用户身份',
+    };
+    this.roleItem.tooltip = '用户身份与后处理状态 · 点击打开设置';
   }
 
-  setMode(mode: KernelMode, port?: number): void {
+  setMode(mode: KernelMode, port?: number, extensionPath?: string): void {
     const icon =
       mode === 'attached' ? '$(debug-start)' : mode === 'spawned' ? '$(rocket)' : '$(debug-disconnect)';
     const portText = port != null ? ` :${port}` : '';
     this.kernelItem.text = `${icon} OCLive ${MODE_LABEL[mode]}${portText}`;
-    this.kernelItem.tooltip =
-      mode === 'offline'
-        ? '点击重连内核（需 oclive.kernelBinary 或 8420 已有服务）'
-        : `内核 ${MODE_LABEL[mode]}${portText} · 点击刷新`;
+    const dataDir = getSharedAppDataHint();
+    if (mode === 'offline') {
+      this.kernelItem.tooltip = '点击打开 OCLive 设置（内核分区）';
+    } else if (mode === 'attached') {
+      this.kernelItem.tooltip =
+        `已附着${portText} · 数据目录 ${dataDir} · 与桌面端共享 app.db · 发行版 profile 由已运行内核决定 · 点击打开设置`;
+    } else {
+      const distroNote =
+        extensionPath && fs.existsSync(path.join(extensionPath, 'distro.oclive.toml'))
+          ? ' · 已加载 distro.oclive.toml'
+          : '';
+      this.kernelItem.tooltip =
+        `本扩展已启动内核 · 数据目录 ${dataDir}${distroNote} · 点击打开设置`;
+    }
   }
 
   setRoleContext(text: string | undefined): void {
@@ -42,8 +63,8 @@ export class KernelStatusBar {
     this.roleItem.show();
   }
 
-  syncFromClient(port: number): void {
-    this.setMode(this.kernel.connectionMode, port);
+  syncFromClient(port: number, extensionPath?: string): void {
+    this.setMode(this.kernel.connectionMode, port, extensionPath);
   }
 
   dispose(): void {

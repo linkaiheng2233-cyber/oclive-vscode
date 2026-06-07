@@ -3,17 +3,27 @@ import * as path from 'path';
 import { emotionEmoji, normalizeEmotionKey } from './emotionAssets';
 import { getConfig, rolePackPath } from './config';
 import { getEffectiveConfig } from './runtimeConfig';
-import { KernelClient } from './kernelClient';
+import { getSharedAppDataHint, KernelClient, type StoredMessage } from './kernelClient';
 import { readRoleDisplayName, readSceneWelcome, resolveEmotionImagePath } from './rolePack';
 import { ensureSetup } from './setup';
 import { KernelStatusBar } from './statusBar';
 
 const SCENE_ID = 'vscode';
 const SESSION_KEY = 'oclive.sessionId';
+const ATTACH_HINT_KEY = 'oclive.attachHintShown';
 
 interface ChatLine {
   role: 'user' | 'assistant' | 'system';
   text: string;
+  /** Dismissible one-shot system hints */
+  dismissible?: boolean;
+}
+
+function storedMessageToLine(msg: StoredMessage): ChatLine {
+  const sender = msg.sender.toLowerCase();
+  const role: ChatLine['role']
+    = sender === 'user' ? 'user' : sender === 'assistant' ? 'assistant' : 'system';
+  return { role, text: msg.content };
 }
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -30,6 +40,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private welcomed = false;
   private pollTimer: ReturnType<typeof setInterval> | undefined;
   private pollBusy = false;
+  private connectionSummary = '';
+  private attachHintVisible = false;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -51,8 +63,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         await this.handleSend(msg.text.trim());
       }
       if (msg.type === 'selectIdentity') {
-        await vscode.commands.executeCommand('oclive.selectUserIdentity');
-        await this.refreshIdentityLabel();
+        await vscode.commands.executeCommand('oclive.openSettings', 'identity');
+      }
+      if (msg.type === 'openSettings') {
+        await vscode.commands.executeCommand('oclive.openSettings');
+      }
+      if (msg.type === 'dismissAttachHint') {
+        this.attachHintVisible = false;
+        void this.context.globalState.update(ATTACH_HINT_KEY, true);
         this.render();
       }
     });
@@ -111,7 +129,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     await vscode.commands.executeCommand('oclive.chatView.focus');
   }
 
-  /** After role or rolesDir change: refresh header and welcome. */
+  /** After role or rolesDir change: refresh header and reload persisted history. */
   async reloadRolePack(): Promise<void> {
     this.lines.length = 0;
     this.welcomed = false;
@@ -139,17 +157,58 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       const pack = rolePackPath(config);
       this.roleName = readRoleDisplayName(pack);
       this.setPortraitEmotion('neutral', pack);
-      if (!this.welcomed) {
-        const welcome = readSceneWelcome(pack, SCENE_ID);
-        if (welcome) {
-          this.lines.push({ role: 'assistant', text: welcome });
-          this.welcomed = true;
-        }
-      }
     }
     await this.refreshKernelStatus();
+    await this.loadChatHistory();
+    if (!this.welcomed && config.rolesDir) {
+      const pack = rolePackPath(config);
+      const welcome = readSceneWelcome(pack, SCENE_ID);
+      if (welcome && !this.lines.some((l) => l.role === 'assistant' || l.role === 'user')) {
+        this.lines.push({ role: 'assistant', text: welcome });
+        this.welcomed = true;
+      }
+    }
     await this.refreshIdentityLabel();
     this.render();
+  }
+
+  private async loadChatHistory(): Promise<void> {
+    const config = getEffectiveConfig();
+    if (!config.rolesDir) {
+      return;
+    }
+    try {
+      await this.kernel.ensureReady(config);
+      const pack = rolePackPath(config);
+      const roleId = path.basename(pack);
+      let sid = this.sessionId();
+      let messages = await this.kernel.fetchChatMessages(sid, config);
+      if (!messages.length) {
+        const sessions = await this.kernel.listChatSessions(roleId, SCENE_ID, config);
+        const matched = sessions.find((s) => s.session_id === sid);
+        const picked =
+          matched ??
+          [...sessions].sort(
+            (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+          )[0];
+        if (picked && picked.session_id !== sid) {
+          sid = picked.session_id;
+          void this.context.globalState.update(SESSION_KEY, sid);
+        }
+        if (picked) {
+          messages = await this.kernel.fetchChatMessages(sid, config);
+        }
+      }
+      if (messages.length) {
+        this.lines.length = 0;
+        for (const msg of messages) {
+          this.lines.push(storedMessageToLine(msg));
+        }
+        this.welcomed = true;
+      }
+    } catch {
+      // History load is best-effort; chat still works without persisted lines.
+    }
   }
 
   private async refreshIdentityLabel(): Promise<void> {
@@ -215,27 +274,53 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  private updateConnectionSummary(mode: 'attached' | 'spawned' | 'offline'): void {
+    if (mode === 'offline') {
+      this.connectionSummary = '';
+      return;
+    }
+    const modeLabel = mode === 'attached' ? 'attach' : 'spawn';
+    this.connectionSummary = `连接：${modeLabel} · 数据：共享（${getSharedAppDataHint()}）`;
+  }
+
+  private maybeShowAttachHint(mode: 'attached' | 'spawned' | 'offline'): void {
+    if (mode !== 'attached') {
+      this.attachHintVisible = false;
+      return;
+    }
+    const shown = this.context.globalState.get<boolean>(ATTACH_HINT_KEY);
+    if (shown) {
+      this.attachHintVisible = false;
+      return;
+    }
+    this.attachHintVisible = true;
+    const hintText =
+      '当前内核可能由桌面端启动，VS Code 专用能力（简洁 Prompt 等）可能未生效。';
+    if (!this.lines.some((l) => l.dismissible && l.text === hintText)) {
+      this.lines.unshift({ role: 'system', text: hintText, dismissible: true });
+    }
+  }
+
   private async refreshKernelStatus(): Promise<void> {
     const config = getEffectiveConfig();
     try {
       if (!(await ensureSetup(this.context))) {
         this.pushSystem('请先配置 oclive.rolesDir（命令：OCLive: Setup）');
+        this.updateConnectionSummary('offline');
         return;
       }
       this.updateWebviewRoots();
       const pack = rolePackPath(config);
       this.roleName = readRoleDisplayName(pack);
-      await this.kernel.ensureReady(config);
-      this.statusBar.syncFromClient(config.apiPort);
-      this.pushSystem(
-        `已连接 · ${this.kernel.connectionMode} · :${config.apiPort} · ${this.roleName}`,
-      );
+      const mode = await this.kernel.ensureReady(config);
+      this.statusBar.syncFromClient(config.apiPort, config.extensionPath);
+      this.updateConnectionSummary(mode);
+      this.maybeShowAttachHint(mode);
     } catch (e) {
-      this.statusBar.syncFromClient(config.apiPort);
+      this.statusBar.syncFromClient(config.apiPort, config.extensionPath);
+      this.updateConnectionSummary('offline');
       const msg = e instanceof Error ? e.message : String(e);
       this.pushSystem(`内核未就绪：${msg}`);
-    } finally {
-      this.render();
     }
   }
 
@@ -300,7 +385,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           text: `错误${result.code ? ` [${result.code}]` : ''}：${result.message}`,
         });
       } else {
-        this.statusBar.syncFromClient(config.apiPort);
+        if (result.sessionId) {
+          void this.context.globalState.update(SESSION_KEY, result.sessionId);
+        }
+        this.statusBar.syncFromClient(config.apiPort, config.extensionPath);
         const emotion = result.portraitEmotion || result.botEmotion || 'neutral';
         this.setPortraitEmotion(emotion, pack);
         this.lines.push({ role: 'assistant', text: result.reply });
@@ -333,7 +421,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const linesHtml = this.lines
       .map((l) => {
         const cls = l.role;
-        return `<div class="msg ${cls}">${this.escapeHtml(l.text)}</div>`;
+        const dismissBtn = l.dismissible
+          ? ' <button type="button" class="dismiss-hint">知道了</button>'
+          : '';
+        return `<div class="msg ${cls}">${this.escapeHtml(l.text)}${dismissBtn}</div>`;
       })
       .join('');
 
@@ -345,6 +436,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       ? '<div class="sending">思考中…</div>'
       : '';
 
+    const connectionLine = this.connectionSummary
+      ? `<div class="conn-summary">${this.escapeHtml(this.connectionSummary)}</div>`
+      : '';
+
     return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -353,18 +448,22 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   <style>
     * { box-sizing: border-box; }
     body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); background: var(--vscode-sideBar-background); margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; }
-    #header { flex-shrink: 0; padding: 10px 8px 6px; text-align: center; border-bottom: 1px solid var(--vscode-widget-border, #444); }
+    #header { flex-shrink: 0; padding: 10px 8px 6px; text-align: center; border-bottom: 1px solid var(--vscode-widget-border, #444); position: relative; }
+    #settings-btn { position: absolute; top: 6px; right: 6px; background: transparent; border: none; cursor: pointer; font-size: 14px; opacity: 0.75; padding: 2px 6px; }
+    #settings-btn:hover { opacity: 1; }
     .portrait-img { max-width: 100%; max-height: 140px; object-fit: contain; border-radius: 6px; }
     .portrait-emoji { font-size: 56px; line-height: 1.2; display: block; }
     .role-meta { margin-top: 6px; font-size: 0.85em; opacity: 0.85; }
     .emotion-tag { font-size: 0.75em; opacity: 0.65; }
     .identity-tag { margin-top: 4px; font-size: 0.75em; opacity: 0.8; }
+    .conn-summary { margin-top: 6px; font-size: 0.7em; opacity: 0.65; word-break: break-all; text-align: left; padding: 0 4px; }
     #identity-btn { margin-left: 6px; font-size: inherit; cursor: pointer; }
     #log { flex: 1; overflow-y: auto; padding: 8px; min-height: 0; }
     .msg { padding: 6px 8px; margin-bottom: 6px; border-radius: 4px; white-space: pre-wrap; word-break: break-word; }
     .user { background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border); }
     .assistant { background: var(--vscode-editor-inactiveSelectionBackground); }
     .system { opacity: 0.75; font-size: 0.9em; font-style: italic; }
+    .dismiss-hint { margin-left: 8px; font-size: inherit; cursor: pointer; }
     .sending { padding: 4px 8px; font-size: 0.85em; opacity: 0.7; }
     #footer { flex-shrink: 0; padding: 8px; border-top: 1px solid var(--vscode-widget-border, #444); }
     #row { display: flex; gap: 6px; }
@@ -378,7 +477,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     ${portraitInner}
     <div class="role-meta">${this.escapeHtml(this.roleName || '角色')}</div>
     <div class="emotion-tag">${this.escapeHtml(this.portraitEmotion)}</div>
-    ${this.identityLabel ? `<div class="identity-tag">${this.escapeHtml(this.identityLabel)} <button type="button" id="identity-btn">切换</button></div>` : ''}
+    ${connectionLine}
+    ${this.identityLabel ? `<div class="identity-tag">${this.escapeHtml(this.identityLabel)} <button type="button" id="identity-btn">设置</button></div>` : ''}
+    <button type="button" id="settings-btn" title="OCLive 设置">⚙</button>
   </div>
   <div id="log">${linesHtml}${sendingHint}</div>
   <div id="footer">
@@ -400,6 +501,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     sendBtn.addEventListener('click', send);
     const identityBtn = document.getElementById('identity-btn');
     identityBtn?.addEventListener('click', () => vscode.postMessage({ type: 'selectIdentity' }));
+    document.getElementById('settings-btn')?.addEventListener('click', () => vscode.postMessage({ type: 'openSettings' }));
+    document.querySelectorAll('.dismiss-hint').forEach((btn) => {
+      btn.addEventListener('click', () => vscode.postMessage({ type: 'dismissAttachHint' }));
+    });
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
     });

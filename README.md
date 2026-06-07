@@ -37,6 +37,17 @@ When a **full** dev/desktop binary is found and `oclive.promoteSharedKernel` is 
 
 Roadmap: [ROADMAP.md](./ROADMAP.md).
 
+## Offline / bundled kernel
+
+When auto-discovery finds no dev build and nothing listens on `:8420`, the extension can spawn a copy from **`bin/`** (not committed to git). Generate it once:
+
+```powershell
+cd D:\oclive-vscode
+.\scripts\bundle-kernel.ps1
+```
+
+See [bin/README.md](./bin/README.md) for placement and fallback order.
+
 ## Develop
 
 ```powershell
