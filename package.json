@@ -127,6 +127,7 @@
     "prepackage": "npm run compile:all",
     "package": "vsce package",
     "lint": "tsc -p ./ --noEmit",
+    "test:capability": "node scripts/test-kernel-capability.mjs",
     "smoke": "node scripts/smoke.mjs",
     "smoke:attach": "node scripts/smoke-attach.mjs"
   },

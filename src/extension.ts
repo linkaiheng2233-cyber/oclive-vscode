@@ -23,7 +23,7 @@ async function refreshKernelUi(): Promise<void> {
   } catch {
     /* status bar reflects offline */
   }
-  statusBar?.syncFromClient(config.apiPort);
+  statusBar?.syncFromClient(config.apiPort, config.extensionPath);
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -131,7 +131,7 @@ export function activate(context: vscode.ExtensionContext): void {
       const eff = getEffectiveConfig();
       try {
         await kernel?.ensureReady(eff);
-        statusBar?.syncFromClient(eff.apiPort);
+        statusBar?.syncFromClient(eff.apiPort, eff.extensionPath);
         void vscode.window.showInformationMessage(
           `OCLive 内核：${kernel?.connectionMode ?? 'offline'} (:${eff.apiPort})`,
         );

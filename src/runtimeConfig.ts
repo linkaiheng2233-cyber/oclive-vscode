@@ -1,12 +1,23 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { getConfig, OcliveConfig } from './config';
 import { resolveEnvironment, sharedAppDataDir, type ResolvedEnvironment } from './discovery';
 
 let cached: ResolvedEnvironment | undefined;
 let extensionPath: string | undefined;
+let kernelBinaryPinned = false;
 
 export function setExtensionPath(path: string): void {
   extensionPath = path;
+}
+
+export function setKernelBinaryPinned(pinned: boolean): void {
+  kernelBinaryPinned = pinned;
+}
+
+export function isKernelBinaryPinned(): boolean {
+  return kernelBinaryPinned;
 }
 
 export function getResolvedEnvironment(): ResolvedEnvironment | undefined {
@@ -89,6 +100,7 @@ async function manualPick(cfg: vscode.WorkspaceConfiguration): Promise<boolean> 
   });
   if (kernelPick?.length) {
     await cfg.update('kernelBinary', kernelPick[0].fsPath, vscode.ConfigurationTarget.Global);
+    setKernelBinaryPinned(true);
   }
   clearResolvedCache();
   return true;
@@ -96,14 +108,30 @@ async function manualPick(cfg: vscode.WorkspaceConfiguration): Promise<boolean> 
 
 export function getEffectiveConfig(): OcliveConfig {
   const base = getConfig();
+  const cfg = vscode.workspace.getConfiguration('oclive');
   const withExt = extensionPath ? { ...base, extensionPath } : base;
+  const envPinned = Boolean((process.env.OCLIVE_KERNEL_BINARY ?? '').trim());
+  const promoteSharedKernel = cfg.get<boolean>('promoteSharedKernel', true);
+  const pinned = envPinned || kernelBinaryPinned;
+  const distroProfile =
+    extensionPath && fs.existsSync(path.join(extensionPath, 'distro.oclive.toml'))
+      ? path.join(extensionPath, 'distro.oclive.toml')
+      : undefined;
   if (cached?.rolesDir) {
     return {
       ...withExt,
       rolesDir: cached.rolesDir,
       kernelBinary: cached.kernelBinary || base.kernelBinary,
       kernelFallbackBinary: cached.kernelFallbackBinary,
+      kernelBinaryPinned: pinned,
+      promoteSharedKernel,
+      distroProfile,
     };
   }
-  return withExt;
+  return {
+    ...withExt,
+    kernelBinaryPinned: pinned,
+    promoteSharedKernel,
+    distroProfile,
+  };
 }

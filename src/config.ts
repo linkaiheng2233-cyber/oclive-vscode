@@ -10,6 +10,12 @@ export interface OcliveConfig {
   extensionPath?: string;
   /** Spawn retry when primary kernel fails (extension `bin/`). */
   kernelFallbackBinary?: string;
+  /** User explicitly pinned kernel path (env or manual setup); skip auto-replace. */
+  kernelBinaryPinned?: boolean;
+  /** Copy dev kernel into shared runtime before spawn (default true). */
+  promoteSharedKernel?: boolean;
+  /** Path to distro.oclive.toml when spawning. */
+  distroProfile?: string;
   includeEditorContext: boolean;
   mockLlm: boolean;
 }

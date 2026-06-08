@@ -5,8 +5,8 @@ import type { KernelClient, KernelMode } from './kernelClient';
 import { getSharedAppDataHint } from './kernelClient';
 
 const MODE_LABEL: Record<KernelMode, string> = {
-  attached: '已连接（attach）',
-  spawned: '已启动（spawn）',
+  attached: '已连接',
+  spawned: '已启动',
   offline: '离线',
 };
 
@@ -34,24 +34,50 @@ export class KernelStatusBar {
   }
 
   setMode(mode: KernelMode, port?: number, extensionPath?: string): void {
+    const info = this.kernel.getConnectionInfo();
     const icon =
-      mode === 'attached' ? '$(debug-start)' : mode === 'spawned' ? '$(rocket)' : '$(debug-disconnect)';
+      mode === 'attached'
+        ? '$(debug-start)'
+        : mode === 'spawned'
+          ? info.degraded
+            ? '$(warning)'
+            : '$(rocket)'
+          : '$(debug-disconnect)';
     const portText = port != null ? ` :${port}` : '';
-    this.kernelItem.text = `${icon} OCLive ${MODE_LABEL[mode]}${portText}`;
+    const source = info.sourceLabel ?? MODE_LABEL[mode];
+    const degradedTag = info.degraded ? ' · 降级内核' : '';
+    this.kernelItem.text = `${icon} OCLive ${MODE_LABEL[mode]}${degradedTag}${portText}`;
+
     const dataDir = getSharedAppDataHint();
+    const lines: string[] = [];
     if (mode === 'offline') {
-      this.kernelItem.tooltip = '点击打开 OCLive 设置（内核分区）';
-    } else if (mode === 'attached') {
-      this.kernelItem.tooltip =
-        `已附着${portText} · 数据目录 ${dataDir} · 与桌面端共享 app.db · 发行版 profile 由已运行内核决定 · 点击打开设置`;
+      lines.push('点击打开 OCLive 设置（内核分区）');
     } else {
-      const distroNote =
-        extensionPath && fs.existsSync(path.join(extensionPath, 'distro.oclive.toml'))
-          ? ' · 已加载 distro.oclive.toml'
-          : '';
-      this.kernelItem.tooltip =
-        `本扩展已启动内核 · 数据目录 ${dataDir}${distroNote} · 点击打开设置`;
+      lines.push(source);
+      if (info.binary) {
+        lines.push(`二进制：${info.binary}`);
+      }
+      if (info.tier) {
+        lines.push(`来源 tier：${info.tier}`);
+      }
+      if (info.replacedExisting) {
+        lines.push('已用更全内核替换 :8420 上的旧进程');
+      }
+      lines.push(`数据目录 ${dataDir} · 与桌面端共享 app.db`);
+      if (mode === 'attached') {
+        lines.push('发行版 profile 由已运行内核决定');
+      } else if (extensionPath && fs.existsSync(path.join(extensionPath, 'distro.oclive.toml'))) {
+        lines.push('已加载 distro.oclive.toml（仅 spawn 时注入）');
+      }
+      if (info.degraded && info.degradeReason) {
+        lines.push(info.degradeReason);
+      }
+      if (info.policyHint) {
+        lines.push(info.policyHint);
+      }
+      lines.push('点击打开设置');
     }
+    this.kernelItem.tooltip = lines.join('\n');
   }
 
   setRoleContext(text: string | undefined): void {

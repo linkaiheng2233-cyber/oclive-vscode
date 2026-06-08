@@ -22,10 +22,11 @@
 
 ## 内核与角色路径（自动发现）
 
-- **8420 已有 `/health`** → 只 attach，不二次 spawn（与桌面共用单写者）。
-- **无服务** → 按分数选 spawn 二进制：共享运行时 `%LOCALAPPDATA%\OCLive\runtime\` > 本机 dev 全量构建（`oclivenewnew-tauri --api` / `oclive-kernel-server`）> 扩展自带 `bin/`（降级）。
+- **策略 SSOT**：`kernel_strategy.rs` + `kernel_distro_profile.rs`（`resolve_kernel_action`）。扩展通过 **`oclive-cli kernel ensure --plan-only --distro vscode --distro-profile …`** 传入 VS Code 的 `DistroProfileRequirements`，本地执行 spawn/replace（见 `src/kernelStrategy.ts`）。
+- **Profile + 能力**：`/health` 的 `active_profile_summary` 与调用方 `distro.oclive.toml` 一并参与决策；profile 已满足 → attach（即使本机有二进制更全）；profile 冲突 → `replace_reason: profile_mismatch`；旧内核无 summary 时回退二进制比较。
+- **8420 无服务** → spawn 最全候选（共享 runtime → dev → 扩展 `bin/`）。
 - **roles**：`OCLIVE_ROLES_DIR` / 工作区 `roles/` / 并列 `oclivenewnew/roles`。
-- 详见扩展 README「Zero-config」表；`oclive.autoDiscover` 默认开。
+- 详见 [`DISTRO_KERNEL_LIFECYCLE.md`](../../oclivenewnew/creator-docs/kernel/DISTRO_KERNEL_LIFECYCLE.md)；`oclive.autoDiscover` 默认开。
 
 ## 设置（渗透默认关）
 

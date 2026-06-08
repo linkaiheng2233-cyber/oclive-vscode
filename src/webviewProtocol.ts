@@ -1,4 +1,4 @@
-import type { KernelMode } from './kernelClient';
+import type { KernelHealthJson, KernelMode } from './kernelClient';
 import type { LlmUserSettings } from './types/llmSettings';
 import type { RoleInfo } from './types/roleInfo';
 import type {
@@ -32,16 +32,7 @@ export interface SettingsDiscoverySnapshot {
   kernelFallbackBinary?: string;
 }
 
-export interface SettingsHealthSnapshot {
-  ok: boolean;
-  runtime_api_version?: string;
-  schema_migration_version?: number | null;
-  kernel_manifest?: {
-    version?: string;
-    build_profile?: string;
-    git_commit?: string;
-  };
-}
+export type SettingsHealthSnapshot = KernelHealthJson;
 
 export interface SettingsStateSnapshot {
   config: Record<string, unknown>;

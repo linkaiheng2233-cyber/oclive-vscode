@@ -1,6 +1,11 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import {
+  MANIFEST_NAME,
+  normalizeManifest,
+  type KernelBinaryManifest,
+} from './kernelManifest';
 import { listRoleIds } from './rolePack';
 
 /**
@@ -54,19 +59,12 @@ export function sharedKernelPath(): string {
   return path.join(SHARED_RUNTIME_DIR, name);
 }
 
-const MANIFEST_NAME = 'oclive-kernel-server.oclive-manifest.json';
 const MAX_RUNTIME_BACKUPS = 3;
 
-interface KernelBinaryManifest {
-  version: string;
-  buildProfile: string;
-  builtAt: string;
-}
-
-function readManifestSidecar(binary: string): KernelBinaryManifest | undefined {
+export function readManifestSidecar(binary: string): KernelBinaryManifest | undefined {
   const sidecar = path.join(path.dirname(binary), MANIFEST_NAME);
   try {
-    return JSON.parse(fs.readFileSync(sidecar, 'utf8')) as KernelBinaryManifest;
+    return normalizeManifest(JSON.parse(fs.readFileSync(sidecar, 'utf8')));
   } catch {
     return undefined;
   }
@@ -319,10 +317,7 @@ export function promoteToSharedRuntime(binary: string): string | undefined {
     fs.copyFileSync(binary, dest);
     const candM = readManifestSidecar(binary);
     if (candM) {
-      fs.writeFileSync(
-        path.join(SHARED_RUNTIME_DIR, MANIFEST_NAME),
-        JSON.stringify(candM, null, 2),
-      );
+      fs.writeFileSync(path.join(SHARED_RUNTIME_DIR, MANIFEST_NAME), JSON.stringify(candM, null, 2));
     }
     return dest;
   } catch {
