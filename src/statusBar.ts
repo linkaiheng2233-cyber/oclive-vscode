@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import type { KernelClient, KernelMode } from './kernelClient';
 import { getSharedAppDataHint } from './kernelClient';
+import { kernelConnectionLabel } from './kernelProfileCopy';
 
 const MODE_LABEL: Record<KernelMode, string> = {
   attached: '已连接',
@@ -44,16 +45,25 @@ export class KernelStatusBar {
             : '$(rocket)'
           : '$(debug-disconnect)';
     const portText = port != null ? ` :${port}` : '';
-    const source = info.sourceLabel ?? MODE_LABEL[mode];
-    const degradedTag = info.degraded ? ' · 降级内核' : '';
-    this.kernelItem.text = `${icon} OCLive ${MODE_LABEL[mode]}${degradedTag}${portText}`;
+    const label =
+      mode === 'offline'
+        ? MODE_LABEL[mode]
+        : kernelConnectionLabel({
+            degraded: info.degraded,
+            profileHintKey: info.profileHintKey,
+            replacedExisting: info.replacedExisting,
+          });
+    this.kernelItem.text = `${icon} OCLive ${label}${portText}`;
 
     const dataDir = getSharedAppDataHint();
     const lines: string[] = [];
     if (mode === 'offline') {
       lines.push('点击打开 OCLive 设置（内核分区）');
     } else {
-      lines.push(source);
+      lines.push(label);
+      if (info.sourceLabel && info.sourceLabel !== label) {
+        lines.push(info.sourceLabel);
+      }
       if (info.binary) {
         lines.push(`二进制：${info.binary}`);
       }

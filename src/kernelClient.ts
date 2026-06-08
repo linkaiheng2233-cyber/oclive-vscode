@@ -17,6 +17,7 @@ import {
   resolveKernelPlan,
   type KernelActionPlan,
 } from './kernelStrategy';
+import { profileHintFromPlan, profileHintKeyFromPlan } from './kernelProfileCopy';
 import type { LlmUserSettings, SaveLlmUserSettingsRequest } from './types/llmSettings';
 import type { RoleInfo } from './types/roleInfo';
 
@@ -49,6 +50,7 @@ export interface KernelConnectionInfo {
   replacedExisting?: boolean;
   /** Profile / policy hint for status bar tooltip. */
   policyHint?: string;
+  profileHintKey?: string;
 }
 
 export interface SessionMeta {
@@ -222,7 +224,8 @@ export class KernelClient {
       this.setConnection({
         mode: 'attached',
         sourceLabel: attachLabel(plan, running?.buildProfile, running?.version),
-        policyHint: policyHintFromPlan(plan),
+        policyHint: profileHintFromPlan(plan),
+        profileHintKey: profileHintKeyFromPlan(plan),
       });
       return this.mode;
     }
@@ -266,6 +269,12 @@ export class KernelClient {
             degraded,
             degradeReason,
             replacedExisting: replaced,
+            policyHint: profileHintFromPlan(plan),
+            profileHintKey: replaced
+              ? 'replaced_for_profile'
+              : degraded
+                ? 'degraded'
+                : profileHintKeyFromPlan(plan),
           });
           return this.mode;
         }
@@ -772,19 +781,6 @@ function attachLabel(
       return buildProfile && version
         ? `attach · ${buildProfile} v${version}`
         : 'attach';
-  }
-}
-
-function policyHintFromPlan(plan: KernelActionPlan): string | undefined {
-  switch (plan.attach_reason) {
-    case 'kernel_pinned_profile_mismatch':
-      return '内核 binary 已 pin，但 profile 与 VS Code 需求不一致';
-    case 'profile_mismatch_no_replace':
-      return '运行内核 profile 与 VS Code 不一致（未允许 replace）';
-    case 'profile_compatible':
-      return '运行内核 profile 已满足 VS Code 需求';
-    default:
-      return undefined;
   }
 }
 
