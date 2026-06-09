@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Collapsible from '../shared/Collapsible.svelte';
   import Toggle from '../shared/Toggle.svelte';
   import type { SettingsStateSnapshot } from '@protocol';
 
@@ -15,10 +14,13 @@
   }
 </script>
 
-<Collapsible title="编辑器" open={state.initialSection === 'editor'}>
-  <Toggle
-    label="发送消息时附带当前文件/选区上下文"
-    bind:checked={includeEditor}
-    on:change={onToggle}
-  />
-</Collapsible>
+<h2 class="title">编辑器</h2>
+<Toggle
+  label="发送消息时附带当前文件/选区上下文"
+  bind:checked={includeEditor}
+  on:change={onToggle}
+/>
+
+<style>
+  .title { font-size: 1em; margin: 0 0 10px; font-weight: 600; }
+</style>

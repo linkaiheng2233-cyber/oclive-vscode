@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Collapsible from '../shared/Collapsible.svelte';
   import Select from '../shared/Select.svelte';
   import type { SettingsStateSnapshot } from '@protocol';
 
@@ -33,21 +32,21 @@
   }
 </script>
 
-<Collapsible title="用户身份" open={state.initialSection === 'identity'}>
-  {#if !ids?.identities?.length}
-    <p class="hint">当前角色包未配置 user_identities/</p>
-  {:else}
-    <p class="row">绑定模式：<code>{binding}</code></p>
-    <Select
-      label="当前身份"
-      bind:value={selected}
-      options={identityOptions}
-      on:change={onChange}
-    />
-  {/if}
-</Collapsible>
+<h2 class="title">用户身份</h2>
+{#if !ids?.identities?.length}
+  <p class="hint">当前角色包未配置 user_identities/</p>
+{:else}
+  <p class="row">绑定模式：<code>{binding}</code></p>
+  <Select
+    label="当前身份"
+    bind:value={selected}
+    options={identityOptions}
+    on:change={onChange}
+  />
+{/if}
 
 <style>
+  .title { font-size: 1em; margin: 0 0 10px; font-weight: 600; }
   .row { font-size: 0.85em; margin-bottom: 6px; }
   .hint { font-size: 0.85em; opacity: 0.75; }
   code { font-family: var(--vscode-editor-font-family); }

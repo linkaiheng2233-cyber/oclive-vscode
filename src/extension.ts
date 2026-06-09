@@ -7,13 +7,13 @@ import { KernelClient } from './kernelClient';
 import { listRoleIds, readRoleDisplayName } from './rolePack';
 import { ensureSetup } from './setup';
 import { onSettingsChanged, setPendingSettingsSection } from './settingsEvents';
-import { SettingsViewProvider } from './settingsViewProvider';
+import { SettingsController } from './settingsViewProvider';
 import type { SettingsSection } from './webviewProtocol';
 import { KernelStatusBar } from './statusBar';
 
 let kernel: KernelClient | undefined;
 let chatProvider: ChatViewProvider | undefined;
-let settingsProvider: SettingsViewProvider | undefined;
+let settingsController: SettingsController | undefined;
 let statusBar: KernelStatusBar | undefined;
 
 async function refreshKernelUi(): Promise<void> {
@@ -30,23 +30,22 @@ export function activate(context: vscode.ExtensionContext): void {
   setExtensionPath(context.extensionPath);
   kernel = new KernelClient();
   statusBar = new KernelStatusBar(kernel);
-  chatProvider = new ChatViewProvider(context.extensionUri, kernel, context, statusBar);
-  settingsProvider = new SettingsViewProvider(
-    context.extensionUri,
+  settingsController = new SettingsController(
     kernel,
     context,
     () => chatProvider,
     () => statusBar,
   );
-
-  context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(ChatViewProvider.viewType, chatProvider, {
-      webviewOptions: { retainContextWhenHidden: true },
-    }),
+  chatProvider = new ChatViewProvider(
+    context.extensionUri,
+    kernel,
+    context,
+    statusBar,
+    settingsController,
   );
 
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(SettingsViewProvider.viewType, settingsProvider, {
+    vscode.window.registerWebviewViewProvider(ChatViewProvider.viewType, chatProvider, {
       webviewOptions: { retainContextWhenHidden: true },
     }),
   );
@@ -67,9 +66,9 @@ export function activate(context: vscode.ExtensionContext): void {
         }
         if (section) {
           setPendingSettingsSection(section);
-          settingsProvider?.setInitialSection(section);
+          settingsController?.setInitialSection(section);
         }
-        await settingsProvider?.focus(section);
+        await chatProvider?.openSettings(section);
       },
     ),
   );
@@ -99,7 +98,8 @@ export function activate(context: vscode.ExtensionContext): void {
       }
       const cfg = vscode.workspace.getConfiguration('oclive');
       const rolesDir = getEffectiveConfig().rolesDir;
-      const ids = listRoleIds(rolesDir);
+      const allowlist = cfg.get<string[]>('roleAllowlist');
+      const ids = listRoleIds(rolesDir, allowlist);
       if (!ids.length) {
         void vscode.window.showWarningMessage(`未在 ${rolesDir} 下找到角色包`);
         return;
@@ -164,10 +164,10 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 export function deactivate(): void {
-  chatProvider?.disposePoll();
+  chatProvider?.disposeAll();
   kernel?.dispose();
   kernel = undefined;
   chatProvider = undefined;
-  settingsProvider = undefined;
+  settingsController = undefined;
   statusBar = undefined;
 }

@@ -47,10 +47,12 @@ export function readSceneWelcome(rolePackDir: string, sceneId: string): string |
 }
 
 /** Role pack folders under roles root that contain v2 blueprint or legacy manifest. */
-export function listRoleIds(rolesDir: string): string[] {
+export function listRoleIds(rolesDir: string, allowlist?: string[]): string[] {
   if (!fs.existsSync(rolesDir)) {
     return [];
   }
+  const allowed =
+    allowlist?.map((s) => s.trim()).filter((s) => s.length > 0) ?? [];
   const out: string[] = [];
   for (const name of fs.readdirSync(rolesDir)) {
     const dir = path.join(rolesDir, name);
@@ -61,6 +63,9 @@ export function listRoleIds(rolesDir: string): string[] {
       fs.existsSync(path.join(dir, 'pipeline.ocblueprint')) ||
       fs.existsSync(path.join(dir, 'manifest.json'))
     ) {
+      if (allowed.length > 0 && !allowed.includes(name)) {
+        continue;
+      }
       out.push(name);
     }
   }

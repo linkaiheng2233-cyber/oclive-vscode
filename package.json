@@ -55,11 +55,6 @@
           "type": "webview",
           "id": "oclive.chatView",
           "name": "Chat"
-        },
-        {
-          "type": "webview",
-          "id": "oclive.settingsView",
-          "name": "Settings"
         }
       ]
     },
@@ -90,6 +85,28 @@
           "type": "string",
           "default": "mumu",
           "description": "Default role pack id under rolesDir."
+        },
+        "oclive.roleAllowlist": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["mumu", "shimeng", "枫侵月"],
+          "description": "When non-empty, only these role pack ids appear in role pickers."
+        },
+        "oclive.chat.portraitMaxHeight": {
+          "type": "number",
+          "default": 0,
+          "description": "Chat portrait max height in px (0 = small avatar only)."
+        },
+        "oclive.chat.inputMinHeight": {
+          "type": "number",
+          "default": 52,
+          "description": "Chat input textarea minimum height in px."
+        },
+        "oclive.settings.placement": {
+          "type": "string",
+          "enum": ["sidebar", "editor-beside"],
+          "default": "sidebar",
+          "description": "Where to open settings: embedded in chat sidebar or beside editor."
         },
         "oclive.kernelBinary": {
           "type": "string",

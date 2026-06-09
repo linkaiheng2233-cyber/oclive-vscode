@@ -1,8 +1,5 @@
-import * as fs from 'fs';
-import * as path from 'path';
 import * as vscode from 'vscode';
 import { rolePackPath } from './config';
-import { sharedAppDataDir } from './discovery';
 import { applyUserIdentitySelection, SCENE_ID } from './identityHelper';
 import { getSharedAppDataHint, KernelClient } from './kernelClient';
 import { getEffectiveConfig } from './runtimeConfig';
@@ -18,63 +15,39 @@ import type {
   WebviewToHostMessage,
 } from './webviewProtocol';
 
-export class SettingsViewProvider implements vscode.WebviewViewProvider {
-  public static readonly viewType = 'oclive.settingsView';
-
-  private view?: vscode.WebviewView;
+/** Pure TS settings controller — no standalone WebviewView. */
+export class SettingsController {
+  private postMessageFn?: (msg: HostToWebviewMessage) => void;
   private initialSection?: SettingsSection;
 
   constructor(
-    private readonly extensionUri: vscode.Uri,
     private readonly kernel: KernelClient,
     private readonly context: vscode.ExtensionContext,
     private readonly getChatProvider: () => ChatViewProvider | undefined,
     private readonly getStatusBar: () => KernelStatusBar | undefined,
   ) {}
 
+  bindPostMessage(fn: (msg: HostToWebviewMessage) => void): void {
+    this.postMessageFn = fn;
+  }
+
   setInitialSection(section: SettingsSection | undefined): void {
     this.initialSection = section;
   }
 
-  resolveWebviewView(
-    webviewView: vscode.WebviewView,
-    _context: vscode.WebviewViewResolveContext,
-    _token: vscode.CancellationToken,
-  ): void {
-    this.view = webviewView;
-    webviewView.webview.options = {
-      enableScripts: true,
-      localResourceRoots: [this.extensionUri],
-    };
-
-    webviewView.webview.onDidReceiveMessage(async (msg: WebviewToHostMessage) => {
-      await this.handleMessage(msg);
-    });
-
-    webviewView.webview.html = this.getHtml(webviewView.webview);
-  }
-
-  async focus(section?: SettingsSection): Promise<void> {
-    if (section) {
-      this.initialSection = section;
-    }
-    await vscode.commands.executeCommand('oclive.settingsView.focus');
-    await this.pushState();
-  }
-
   async pushState(): Promise<void> {
-    if (!this.view) {
+    if (!this.postMessageFn) {
       return;
     }
     const payload = await this.buildStateSnapshot();
-    this.postMessage({ type: 'state', payload });
+    this.postMessageFn({ type: 'state', payload });
   }
 
   private postMessage(msg: HostToWebviewMessage): void {
-    void this.view?.webview.postMessage(msg);
+    this.postMessageFn?.(msg);
   }
 
-  private async buildStateSnapshot(): Promise<SettingsStateSnapshot> {
+  async buildStateSnapshot(): Promise<SettingsStateSnapshot> {
     const eff = getEffectiveConfig();
     const cfg = vscode.workspace.getConfiguration('oclive');
     const roleId = eff.roleId;
@@ -110,11 +83,15 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
         promoteSharedKernel: cfg.get('promoteSharedKernel'),
         rolesDir: eff.rolesDir,
         roleId: eff.roleId,
+        roleAllowlist: cfg.get('roleAllowlist'),
         kernelBinary: eff.kernelBinary,
         includeEditorContext: cfg.get('includeEditorContext'),
         mockLlm: cfg.get('mockLlm'),
         'penetration.letterEnabled': cfg.get('penetration.letterEnabled'),
         'penetration.heartVoiceEnabled': cfg.get('penetration.heartVoiceEnabled'),
+        'chat.portraitMaxHeight': cfg.get('chat.portraitMaxHeight'),
+        'chat.inputMinHeight': cfg.get('chat.inputMinHeight'),
+        'settings.placement': cfg.get('settings.placement'),
       },
       kernelMode: this.kernel.connectionMode,
       roleInfo,
@@ -122,7 +99,7 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
       health,
       llmSettings,
       ollamaModels,
-      roleIds: eff.rolesDir ? listRoleIds(eff.rolesDir) : [],
+      roleIds: eff.rolesDir ? listRoleIds(eff.rolesDir, cfg.get<string[]>('roleAllowlist')) : [],
       sharedAppData: getSharedAppDataHint(),
       discovery: {
         rolesDir: eff.rolesDir,
@@ -133,10 +110,13 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
     };
   }
 
-  private async handleMessage(msg: WebviewToHostMessage): Promise<void> {
+  async handleMessage(msg: WebviewToHostMessage): Promise<void> {
     switch (msg.type) {
       case 'ready':
         await this.pushState();
+        break;
+      case 'closeSettings':
+        await this.getChatProvider()?.closeSettings();
         break;
       case 'updateConfig':
         await this.handleUpdateConfig(msg.key, msg.value);
@@ -151,10 +131,13 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
         await this.handleReconnect();
         break;
       case 'saveLlmSettings':
-        await this.handleSaveLlmSettings(msg.ollamaBaseUrl, msg.ollamaModel);
+        await this.handleSaveLlmSettings(msg);
         break;
       case 'setSessionModel':
         await this.handleSetSessionModel(msg.model);
+        break;
+      case 'refreshOllamaModels':
+        await this.handleRefreshOllamaModels();
         break;
       case 'reloadLlm':
         await this.handleReloadLlm();
@@ -171,6 +154,7 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
     await cfg.update(key, value, vscode.ConfigurationTarget.Global);
     this.postMessage({ type: 'toast', level: 'info', message: `已更新 ${key}` });
     emitSettingsChanged();
+    await this.getChatProvider()?.onSettingsLayoutChanged();
     await this.pushState();
   }
 
@@ -219,8 +203,7 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async handleSaveLlmSettings(
-    ollamaBaseUrl: string,
-    ollamaModel?: string | null,
+    msg: Extract<WebviewToHostMessage, { type: 'saveLlmSettings' }>,
   ): Promise<void> {
     const eff = getEffectiveConfig();
     const roleId = eff.roleId;
@@ -229,9 +212,13 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
       {
         roleId,
         sessionId: sessionId ?? null,
-        provider: 'local',
-        ollamaBaseUrl,
-        ollamaModel: ollamaModel ?? null,
+        provider: msg.provider,
+        cloudApiStyle: msg.cloudApiStyle ?? 'openai',
+        ollamaBaseUrl: msg.ollamaBaseUrl,
+        ollamaModel: msg.ollamaModel ?? null,
+        remoteUrl: msg.remoteUrl,
+        remoteToken: msg.remoteToken,
+        remoteModel: msg.remoteModel,
       },
       eff,
     );
@@ -239,6 +226,7 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
       await this.kernel.reloadLlm(eff);
       this.postMessage({ type: 'toast', level: 'info', message: '模型设置已保存' });
       emitSettingsChanged();
+      await this.getChatProvider()?.refreshLlmContext();
     } else {
       this.postMessage({ type: 'toast', level: 'error', message: '保存模型设置失败' });
     }
@@ -247,20 +235,44 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
 
   private async handleSetSessionModel(model: string | null): Promise<void> {
     const eff = getEffectiveConfig();
+    const roleId = eff.roleId;
     const sessionId = this.context.globalState.get<string>('oclive.sessionId');
-    const info = await this.kernel.setSessionOllamaModel(
-      eff.roleId,
-      model,
-      sessionId,
-      eff,
-    );
-    if (info) {
-      await this.kernel.reloadLlm(eff);
-      this.postMessage({ type: 'toast', level: 'info', message: '会话模型已更新' });
-      emitSettingsChanged();
+    const llm = await this.kernel.getLlmUserSettings(roleId, sessionId, eff);
+
+    if (llm?.provider === 'cloud') {
+      const info = await this.kernel.saveLlmUserSettings(
+        {
+          roleId,
+          sessionId: sessionId ?? null,
+          provider: 'cloud',
+          cloudApiStyle: 'openai',
+          remoteModel: model ?? '',
+        },
+        eff,
+      );
+      if (info) {
+        await this.kernel.reloadLlm(eff);
+        this.postMessage({ type: 'toast', level: 'info', message: '云端模型已更新' });
+        emitSettingsChanged();
+        await this.getChatProvider()?.refreshLlmContext();
+      } else {
+        this.postMessage({ type: 'toast', level: 'error', message: '云端模型更新失败' });
+      }
     } else {
-      this.postMessage({ type: 'toast', level: 'error', message: '会话模型更新失败' });
+      const info = await this.kernel.setSessionOllamaModel(roleId, model, sessionId, eff);
+      if (info) {
+        await this.kernel.reloadLlm(eff);
+        this.postMessage({ type: 'toast', level: 'info', message: '会话模型已更新' });
+        emitSettingsChanged();
+        await this.getChatProvider()?.refreshLlmContext();
+      } else {
+        this.postMessage({ type: 'toast', level: 'error', message: '会话模型更新失败' });
+      }
     }
+    await this.pushState();
+  }
+
+  private async handleRefreshOllamaModels(): Promise<void> {
     await this.pushState();
   }
 
@@ -274,49 +286,7 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
     });
     await this.pushState();
   }
-
-  private getHtml(webview: vscode.Webview): string {
-    const distDir = path.join(this.extensionUri.fsPath, 'webview-ui', 'dist');
-    const indexPath = path.join(distDir, 'index.html');
-    if (!fs.existsSync(indexPath)) {
-      return `<!DOCTYPE html><html><body style="font-family:var(--vscode-font-family);padding:12px;color:var(--vscode-foreground)">
-        <p>设置 UI 未构建。请运行 <code>npm run build:webview</code> 后重载扩展。</p>
-      </body></html>`;
-    }
-    let html = fs.readFileSync(indexPath, 'utf8');
-    const nonce = getNonce();
-    const csp = [
-      "default-src 'none'",
-      `img-src ${webview.cspSource} https: data:`,
-      `style-src ${webview.cspSource} 'unsafe-inline'`,
-      `script-src 'nonce-${nonce}'`,
-      `font-src ${webview.cspSource}`,
-    ].join('; ');
-
-    html = html.replace(/<script/g, `<script nonce="${nonce}"`);
-    html = html.replace(
-      /<head>/,
-      `<head><meta http-equiv="Content-Security-Policy" content="${csp}">`,
-    );
-
-    // Rewrite asset paths to webview URIs
-    html = html.replace(/(href|src)="([^"]+)"/g, (_m, attr: string, url: string) => {
-      if (url.startsWith('http') || url.startsWith('data:')) {
-        return `${attr}="${url}"`;
-      }
-      const resource = vscode.Uri.joinPath(this.extensionUri, 'webview-ui', 'dist', url.replace(/^\.\//, ''));
-      return `${attr}="${webview.asWebviewUri(resource)}"`;
-    });
-
-    return html;
-  }
 }
 
-function getNonce(): string {
-  let text = '';
-  const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  for (let i = 0; i < 32; i++) {
-    text += possible.charAt(Math.floor(Math.random() * possible.length));
-  }
-  return text;
-}
+/** @deprecated Use SettingsController */
+export const SettingsViewProvider = SettingsController;

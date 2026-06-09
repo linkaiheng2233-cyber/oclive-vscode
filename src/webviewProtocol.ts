@@ -12,11 +12,15 @@ export type OcliveSettingsKey =
   | 'promoteSharedKernel'
   | 'rolesDir'
   | 'roleId'
+  | 'roleAllowlist'
   | 'kernelBinary'
   | 'includeEditorContext'
   | 'mockLlm'
   | 'penetration.letterEnabled'
-  | 'penetration.heartVoiceEnabled';
+  | 'penetration.heartVoiceEnabled'
+  | 'chat.portraitMaxHeight'
+  | 'chat.inputMinHeight'
+  | 'settings.placement';
 
 export type SettingsSection =
   | 'role'
@@ -24,6 +28,7 @@ export type SettingsSection =
   | 'kernel'
   | 'editor'
   | 'model'
+  | 'layout'
   | 'advanced';
 
 export interface SettingsDiscoverySnapshot {
@@ -51,12 +56,23 @@ export interface SettingsStateSnapshot {
 /** Webview → extension host */
 export type WebviewToHostMessage =
   | { type: 'ready' }
+  | { type: 'closeSettings' }
   | { type: 'updateConfig'; key: OcliveSettingsKey; value: unknown }
   | { type: 'selectRole'; roleId: string }
   | { type: 'setIdentity'; identityId: string }
   | { type: 'reconnectKernel' }
-  | { type: 'saveLlmSettings'; ollamaBaseUrl: string; ollamaModel?: string | null }
+  | {
+      type: 'saveLlmSettings';
+      provider: 'local' | 'cloud';
+      ollamaBaseUrl?: string;
+      ollamaModel?: string | null;
+      remoteUrl?: string;
+      remoteToken?: string;
+      remoteModel?: string;
+      cloudApiStyle?: 'openai' | 'oclive_jsonrpc';
+    }
   | { type: 'setSessionModel'; model: string | null }
+  | { type: 'refreshOllamaModels' }
   | { type: 'reloadLlm' }
   | { type: 'navigateSection'; section: SettingsSection };
 

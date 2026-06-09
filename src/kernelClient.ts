@@ -508,8 +508,12 @@ export class KernelClient {
           roleId: req.roleId,
           sessionId: req.sessionId ?? null,
           provider: req.provider,
+          cloudApiStyle: req.cloudApiStyle,
           ollamaBaseUrl: req.ollamaBaseUrl,
           ollamaModel: req.ollamaModel ?? null,
+          remoteUrl: req.remoteUrl,
+          remoteToken: req.remoteToken,
+          remoteModel: req.remoteModel,
         }),
         signal: AbortSignal.timeout(15000),
       });

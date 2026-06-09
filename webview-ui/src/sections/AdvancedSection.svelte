@@ -1,6 +1,6 @@
 <script lang="ts">
-  import Collapsible from '../shared/Collapsible.svelte';
   import Toggle from '../shared/Toggle.svelte';
+  import Select from '../shared/Select.svelte';
   import type { OcliveSettingsKey, SettingsStateSnapshot } from '@protocol';
 
   export let state: SettingsStateSnapshot;
@@ -10,50 +10,65 @@
   let autoDiscover = true;
   let promoteShared = true;
   let apiPort = 8420;
+  let placement = 'sidebar';
 
   $: mockLlm = Boolean(state.config.mockLlm);
   $: autoDiscover = Boolean(state.config.autoDiscover);
   $: promoteShared = Boolean(state.config.promoteSharedKernel);
   $: apiPort = Number(state.config.apiPort ?? 8420);
+  $: placement = String(state.config['settings.placement'] ?? 'sidebar');
+
+  const placementOptions = [
+    { value: 'sidebar', label: '侧栏内嵌（默认）' },
+    { value: 'editor-beside', label: '编辑器旁（高级）' },
+  ];
 
   function update(key: OcliveSettingsKey, value: unknown): void {
     post({ type: 'updateConfig', key, value });
   }
 </script>
 
-<Collapsible title="高级" open={state.initialSection === 'advanced'}>
-  <label class="field">
-    <span>API 端口</span>
-    <input
-      type="number"
-      bind:value={apiPort}
-      on:change={() => update('apiPort', apiPort)}
-    />
-  </label>
-  <Toggle
-    label="自动发现 rolesDir / 内核二进制"
-    bind:checked={autoDiscover}
-    on:change={() => update('autoDiscover', autoDiscover)}
+<h2 class="title">高级</h2>
+
+<Select
+  label="设置面板位置"
+  bind:value={placement}
+  options={placementOptions}
+  on:change={() => update('settings.placement', placement)}
+/>
+
+<label class="field">
+  <span>API 端口</span>
+  <input
+    type="number"
+    bind:value={apiPort}
+    on:change={() => update('apiPort', apiPort)}
   />
-  <Toggle
-    label="提升共享内核到 %LOCALAPPDATA%/OCLive/runtime"
-    bind:checked={promoteShared}
-    on:change={() => update('promoteSharedKernel', promoteShared)}
-  />
-  <Toggle
-    label="Mock LLM（spawn 时 OCLIVE_HTTP_API_MOCK_LLM=1）"
-    bind:checked={mockLlm}
-    on:change={() => update('mockLlm', mockLlm)}
-  />
-  <p class="sub">修改端口或 mock 后请重连内核。</p>
-  <hr />
-  <p class="future">[Future] 渗透 · 心声/信件</p>
-  <Toggle label="penetration.letterEnabled" checked={false} disabled />
-  <p class="future">[Future] 渗透 · 心声 Markdown</p>
-  <Toggle label="penetration.heartVoiceEnabled" checked={false} disabled />
-</Collapsible>
+</label>
+<Toggle
+  label="自动发现 rolesDir / 内核二进制"
+  bind:checked={autoDiscover}
+  on:change={() => update('autoDiscover', autoDiscover)}
+/>
+<Toggle
+  label="提升共享内核到 %LOCALAPPDATA%/OCLive/runtime"
+  bind:checked={promoteShared}
+  on:change={() => update('promoteSharedKernel', promoteShared)}
+/>
+<Toggle
+  label="Mock LLM（spawn 时 OCLIVE_HTTP_API_MOCK_LLM=1）"
+  bind:checked={mockLlm}
+  on:change={() => update('mockLlm', mockLlm)}
+/>
+<p class="sub">修改端口或 mock 后请重连内核。</p>
+<hr />
+<p class="future">[Future] 渗透 · 心声/信件</p>
+<Toggle label="penetration.letterEnabled" checked={false} disabled />
+<p class="future">[Future] 渗透 · 心声 Markdown</p>
+<Toggle label="penetration.heartVoiceEnabled" checked={false} disabled />
 
 <style>
+  .title { font-size: 1em; margin: 0 0 10px; font-weight: 600; }
   .field {
     display: flex;
     flex-direction: column;

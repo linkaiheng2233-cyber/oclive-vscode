@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Collapsible from '../shared/Collapsible.svelte';
   import type { SettingsStateSnapshot } from '@protocol';
 
   export let state: SettingsStateSnapshot;
@@ -14,21 +13,21 @@
   $: manifest = state.health?.kernel_manifest;
 </script>
 
-<Collapsible title="内核" open={state.initialSection === 'kernel'}>
-  <p class="row"><strong>模式</strong> {modeLabel[state.kernelMode] ?? state.kernelMode}</p>
-  <p class="row"><strong>端口</strong> :{state.config.apiPort}</p>
-  <p class="row"><strong>数据目录</strong> <span class="mono">{state.sharedAppData}</span></p>
-  {#if manifest?.version}
-    <p class="row"><strong>内核版本</strong> {manifest.version}</p>
-  {/if}
-  {#if state.kernelMode === 'attached'}
-    <p class="hint">当前内核可能由桌面端启动；发行版 profile 由已运行内核决定。</p>
-  {/if}
-  <p class="row mono">kernel: {state.discovery.kernelBinary || '（自动发现）'}</p>
-  <button type="button" on:click={() => post({ type: 'reconnectKernel' })}>重连内核</button>
-</Collapsible>
+<h2 class="title">内核</h2>
+<p class="row"><strong>模式</strong> {modeLabel[state.kernelMode] ?? state.kernelMode}</p>
+<p class="row"><strong>端口</strong> :{state.config.apiPort}</p>
+<p class="row"><strong>数据目录</strong> <span class="mono">{state.sharedAppData}</span></p>
+{#if manifest?.version}
+  <p class="row"><strong>内核版本</strong> {manifest.version}</p>
+{/if}
+{#if state.kernelMode === 'attached'}
+  <p class="hint">当前内核可能由桌面端启动；发行版 profile 由已运行内核决定。</p>
+{/if}
+<p class="row mono">kernel: {state.discovery.kernelBinary || '（自动发现）'}</p>
+<button type="button" on:click={() => post({ type: 'reconnectKernel' })}>重连内核</button>
 
 <style>
+  .title { font-size: 1em; margin: 0 0 10px; font-weight: 600; }
   .row { margin: 4px 0; font-size: 0.9em; }
   .mono { font-family: var(--vscode-editor-font-family); word-break: break-all; }
   .hint { font-size: 0.85em; opacity: 0.8; margin: 8px 0; }

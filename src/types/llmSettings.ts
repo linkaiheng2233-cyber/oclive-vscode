@@ -20,6 +20,10 @@ export interface SaveLlmUserSettingsRequest {
   roleId: string;
   sessionId?: string | null;
   provider: 'local' | 'cloud';
+  cloudApiStyle?: 'openai' | 'oclive_jsonrpc';
   ollamaBaseUrl?: string;
   ollamaModel?: string | null;
+  remoteUrl?: string;
+  remoteToken?: string;
+  remoteModel?: string;
 }
