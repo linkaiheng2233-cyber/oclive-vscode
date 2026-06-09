@@ -99,11 +99,6 @@
           "maximum": 420,
           "description": "Chat portrait pane height in px. Drag the splitter in Chat or adjust in Settings → Layout."
         },
-        "oclive.chat.portraitMaxHeight": {
-          "type": "number",
-          "default": 32,
-          "description": "Deprecated: use oclive.chat.portraitPaneHeight. Legacy values ≤32 map to 180px pane height."
-        },
         "oclive.chat.inputMinHeight": {
           "type": "number",
           "default": 52,
@@ -129,16 +124,6 @@
           "type": "boolean",
           "default": false,
           "description": "Set OCLIVE_HTTP_API_MOCK_LLM=1 when spawning kernel (dev only)."
-        },
-        "oclive.penetration.letterEnabled": {
-          "type": "boolean",
-          "default": false,
-          "description": "[Future] Append idle letters to workspace .oclive/*.md"
-        },
-        "oclive.penetration.heartVoiceEnabled": {
-          "type": "boolean",
-          "default": false,
-          "description": "[Future] Append heart-voice markdown in workspace"
         }
       }
     }
@@ -151,6 +136,7 @@
     "prepackage": "npm run compile:all",
     "package": "vsce package",
     "lint": "tsc -p ./ --noEmit",
+    "test:unit": "tsc -p ./ && node scripts/test-unit.mjs",
     "test:capability": "node scripts/test-kernel-capability.mjs",
     "test:ensure-report": "node scripts/test-ensure-report.mjs",
     "smoke": "node scripts/smoke.mjs",

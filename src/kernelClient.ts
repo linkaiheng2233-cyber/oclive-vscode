@@ -19,6 +19,7 @@ import {
   type KernelActionPlan,
 } from './kernelStrategy';
 import { profileHintFromPlan, profileHintKeyFromPlan } from './kernelProfileCopy';
+import { ensureReadyDecision } from './ensureReadyPolicy';
 import { parseKernelErrorResponse, type KernelResult } from './kernelError';
 import type { LlmUserSettings, SaveLlmUserSettingsRequest } from './types/llmSettings';
 import type { RoleInfo } from './types/roleInfo';
@@ -144,23 +145,23 @@ export interface UserIdentityStateResponse {
   effective_relation_key: string;
 }
 
-export interface RoleInfoSummary {
-  identity_binding?: 'global' | 'per_scene';
-  reply_post_processor_enabled?: boolean;
-  reply_post_processor_backend?: string;
-  reply_post_processor_profile?: string | null;
-}
-
-/** @deprecated Use {@link RoleInfo} from `./types/roleInfo`. */
-export type { RoleInfo };
+const ENSURE_READY_TTL_MS = 5000;
 
 export class KernelClient {
   private spawned: ChildProcess | null = null;
   private mode: KernelMode = 'offline';
   private connectionInfo: KernelConnectionInfo = { mode: 'offline' };
+  private ensureReadyCachedAt = 0;
+  private ensureReadyInFlight: Promise<KernelMode> | null = null;
 
   get connectionMode(): KernelMode {
     return this.mode;
+  }
+
+  /** Drop cached attach/spawn state; next ensureReady runs full discovery/plan. */
+  invalidateEnsureReady(): void {
+    this.ensureReadyCachedAt = 0;
+    this.ensureReadyInFlight = null;
   }
 
   getConnectionInfo(): KernelConnectionInfo {
@@ -210,8 +211,57 @@ export class KernelClient {
   /**
    * Capability-first bring-up via Rust SSOT (`oclive kernel ensure --plan-only`).
    * Host-side execution: attach / spawn / replace on this process.
+   * Successful attach/spawn is cached briefly; callers otherwise use checkHealth.
    */
-  async ensureReady(config: OcliveConfig = cfg()): Promise<KernelMode> {
+  async ensureReady(
+    config: OcliveConfig = cfg(),
+    opts?: { force?: boolean },
+  ): Promise<KernelMode> {
+    const decision = ensureReadyDecision({
+      force: opts?.force,
+      mode: this.mode,
+      cachedAt: this.ensureReadyCachedAt,
+      now: Date.now(),
+      ttlMs: ENSURE_READY_TTL_MS,
+    });
+
+    // Recently validated: reuse without any network call. This keeps bursts of
+    // calls (e.g. a role switch) from re-running the full oclive-cli plan or
+    // respawning the kernel, which is what previously froze the extension.
+    if (decision === 'trust') {
+      return this.mode;
+    }
+
+    // Stale but online: a single cheap /health probe decides keep-vs-replan.
+    if (decision === 'revalidate') {
+      if (await this.checkHealth(config)) {
+        this.ensureReadyCachedAt = Date.now();
+        return this.mode;
+      }
+      this.invalidateEnsureReady();
+      this.setConnection({ mode: 'offline' });
+    }
+
+    if (!opts?.force && this.ensureReadyInFlight) {
+      return this.ensureReadyInFlight;
+    }
+
+    const run = this.ensureReadyUncached(config);
+    this.ensureReadyInFlight = run;
+    try {
+      const mode = await run;
+      if (mode !== 'offline') {
+        this.ensureReadyCachedAt = Date.now();
+      }
+      return mode;
+    } finally {
+      if (this.ensureReadyInFlight === run) {
+        this.ensureReadyInFlight = null;
+      }
+    }
+  }
+
+  private async ensureReadyUncached(config: OcliveConfig): Promise<KernelMode> {
     const candidates = discoverCandidates(config);
     const allowReplace = await computeAllowReplace(config, candidates);
     const report = await resolveKernelPlan(config, { allowReplace });
@@ -406,6 +456,7 @@ export class KernelClient {
       console.log('[oclive-kernel] exited', code);
       this.spawned = null;
       if (this.mode === 'spawned') {
+        this.invalidateEnsureReady();
         this.setConnection({ mode: 'offline' });
       }
     });
@@ -430,6 +481,10 @@ export class KernelClient {
     const body = (await res.json()) as Record<string, unknown>;
 
     if (!res.ok) {
+      if (res.status >= 500 || res.status === 0) {
+        this.invalidateEnsureReady();
+        this.setConnection({ mode: 'offline' });
+      }
       const err = body.error as { code?: string; message?: string } | undefined;
       return {
         ok: false,
@@ -818,6 +873,7 @@ export class KernelClient {
       this.spawned.kill();
       this.spawned = null;
     }
+    this.invalidateEnsureReady();
     this.setConnection({ mode: 'offline' });
   }
 }

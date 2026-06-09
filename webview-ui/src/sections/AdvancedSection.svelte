@@ -1,6 +1,7 @@
 <script lang="ts">
   import Toggle from '../shared/Toggle.svelte';
   import Select from '../shared/Select.svelte';
+  import Collapsible from '../shared/Collapsible.svelte';
   import type { OcliveSettingsKey, SettingsStateSnapshot } from '@protocol';
 
   export let state: SettingsStateSnapshot;
@@ -39,11 +40,7 @@
 
 <label class="field">
   <span>API 端口</span>
-  <input
-    type="number"
-    bind:value={apiPort}
-    on:change={() => update('apiPort', apiPort)}
-  />
+  <input type="number" bind:value={apiPort} on:change={() => update('apiPort', apiPort)} />
 </label>
 <Toggle
   label="自动发现 rolesDir / 内核二进制"
@@ -61,14 +58,18 @@
   on:change={() => update('mockLlm', mockLlm)}
 />
 <p class="sub">修改端口或 mock 后请重连内核。</p>
-<hr />
-<p class="future">[Future] 渗透 · 心声/信件</p>
-<Toggle label="penetration.letterEnabled" checked={false} disabled />
-<p class="future">[Future] 渗透 · 心声 Markdown</p>
-<Toggle label="penetration.heartVoiceEnabled" checked={false} disabled />
+
+<Collapsible title="实验性（未实现）">
+  <p class="future">渗透 · 心声/信件等工作区 Markdown 写入尚未实现，无配置项。</p>
+  <p class="future">idle 聚焦、终端一行展示等见 ROADMAP「渗透」段。</p>
+</Collapsible>
 
 <style>
-  .title { font-size: 1em; margin: 0 0 10px; font-weight: 600; }
+  .title {
+    font-size: 1em;
+    margin: 0 0 10px;
+    font-weight: 600;
+  }
   .field {
     display: flex;
     flex-direction: column;
@@ -84,7 +85,13 @@
     padding: 4px 6px;
     max-width: 120px;
   }
-  .sub { font-size: 0.8em; opacity: 0.7; }
-  .future { font-size: 0.85em; opacity: 0.65; margin: 8px 0 4px; }
-  hr { border: none; border-top: 1px solid var(--vscode-widget-border); margin: 10px 0; }
+  .sub {
+    font-size: 0.8em;
+    opacity: 0.7;
+  }
+  .future {
+    font-size: 0.85em;
+    opacity: 0.65;
+    margin: 4px 0;
+  }
 </style>

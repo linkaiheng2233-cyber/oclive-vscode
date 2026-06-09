@@ -127,7 +127,8 @@ export function activate(context: vscode.ExtensionContext): void {
       }
       const eff = getEffectiveConfig();
       try {
-        await kernel?.ensureReady(eff);
+        kernel?.invalidateEnsureReady();
+        await kernel?.ensureReady(eff, { force: true });
         statusBar?.syncFromClient(eff.apiPort, eff.extensionPath);
         void vscode.window.showInformationMessage(
           `OCLive 内核：${kernel?.connectionMode ?? 'offline'} (:${eff.apiPort})`,

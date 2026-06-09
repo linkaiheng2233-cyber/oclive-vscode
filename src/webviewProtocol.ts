@@ -1,9 +1,41 @@
 import type { KernelHealthJson, KernelMode } from './kernelClient';
 import type { LlmUserSettings } from './types/llmSettings';
 import type { RoleInfo } from './types/roleInfo';
-import type {
-  UserIdentityStateResponse,
-} from './kernelClient';
+import type { UserIdentityStateResponse } from './kernelClient';
+
+export type AppView = 'chat' | 'settings';
+
+export interface ChatLine {
+  role: 'user' | 'assistant' | 'system';
+  text: string;
+  dismissible?: boolean;
+}
+
+export interface RoleOptionSnapshot {
+  id: string;
+  name: string;
+}
+
+export interface ChatPatchPayload {
+  roleName?: string;
+  roleOptions?: RoleOptionSnapshot[];
+  currentRoleId?: string;
+  roleSwitching?: boolean;
+  portraitSrc?: string;
+  portraitEmoji?: string;
+  portraitPaneHeight?: number;
+  emotion?: string;
+  identityLabel?: string;
+  connectionSummary?: string;
+  llmSummary?: string;
+  editorChip?: string;
+  sending?: boolean;
+  inputMinHeight?: number;
+  /** Full replace of the conversation log (bootstrap, new chat, role switch). */
+  lines?: ChatLine[];
+  /** Append-only delta; webview merges without rebuilding prior rows. */
+  appendLines?: ChatLine[];
+}
 
 /** Settings keys writable from the settings webview. */
 export type OcliveSettingsKey =
@@ -16,9 +48,6 @@ export type OcliveSettingsKey =
   | 'kernelBinary'
   | 'includeEditorContext'
   | 'mockLlm'
-  | 'penetration.letterEnabled'
-  | 'penetration.heartVoiceEnabled'
-  | 'chat.portraitMaxHeight'
   | 'chat.portraitPaneHeight'
   | 'chat.inputMinHeight'
   | 'settings.placement';
@@ -40,11 +69,6 @@ export interface SettingsDiscoverySnapshot {
 
 export type SettingsHealthSnapshot = KernelHealthJson;
 
-export interface RoleOptionSnapshot {
-  id: string;
-  name: string;
-}
-
 export interface SettingsStateSnapshot {
   config: Record<string, unknown>;
   kernelMode: KernelMode;
@@ -54,8 +78,6 @@ export interface SettingsStateSnapshot {
   discovery: SettingsDiscoverySnapshot;
   llmSettings: LlmUserSettings | null;
   ollamaModels: string[];
-  /** @deprecated Prefer roleOptions */
-  roleIds: string[];
   roleOptions: RoleOptionSnapshot[];
   currentRoleId: string;
   sharedAppData: string;
@@ -65,9 +87,15 @@ export interface SettingsStateSnapshot {
 /** Webview → extension host */
 export type WebviewToHostMessage =
   | { type: 'ready' }
+  | { type: 'shellReady' }
   | { type: 'closeSettings' }
-  | { type: 'updateConfig'; key: OcliveSettingsKey; value: unknown }
+  | { type: 'openSettings'; section?: SettingsSection }
+  | { type: 'send'; text: string }
+  | { type: 'newChat' }
   | { type: 'selectRole'; roleId: string }
+  | { type: 'resizePortraitPane'; height: number }
+  | { type: 'dismissHint' }
+  | { type: 'updateConfig'; key: OcliveSettingsKey; value: unknown }
   | { type: 'setIdentity'; identityId: string }
   | { type: 'reconnectKernel' }
   | {
@@ -87,6 +115,8 @@ export type WebviewToHostMessage =
 
 /** Extension host → webview */
 export type HostToWebviewMessage =
+  | { type: 'view'; view: AppView; initialSection?: SettingsSection }
+  | { type: 'chatPatch'; payload: ChatPatchPayload }
   | { type: 'state'; payload: SettingsStateSnapshot }
   | { type: 'toast'; level: 'info' | 'error'; message: string }
   | { type: 'ollamaModelsResult'; models: string[]; error?: string }

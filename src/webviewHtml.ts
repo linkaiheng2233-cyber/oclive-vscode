@@ -11,7 +11,7 @@ function getNonce(): string {
   return text;
 }
 
-export function buildSettingsWebviewHtml(
+export function buildWebviewHtml(
   extensionUri: vscode.Uri,
   webview: vscode.Webview,
   opts?: { maxWidthPx?: number },
@@ -20,7 +20,7 @@ export function buildSettingsWebviewHtml(
   const indexPath = path.join(distDir, 'index.html');
   if (!fs.existsSync(indexPath)) {
     return `<!DOCTYPE html><html><body style="font-family:var(--vscode-font-family);padding:12px;color:var(--vscode-foreground)">
-        <p>设置 UI 未构建。请运行 <code>npm run build:webview</code> 后重载扩展。</p>
+        <p>Webview UI 未构建。请运行 <code>npm run build:webview</code> 后重载扩展。</p>
       </body></html>`;
   }
   let html = fs.readFileSync(indexPath, 'utf8');

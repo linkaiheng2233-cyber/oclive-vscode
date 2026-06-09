@@ -28,10 +28,22 @@
     opacity: 0.85;
   }
   select {
-    background: var(--vscode-input-background);
-    color: var(--vscode-input-foreground);
-    border: 1px solid var(--vscode-input-border);
-    border-radius: 3px;
+    background: var(--vscode-dropdown-background, var(--vscode-input-background));
+    color: var(--vscode-dropdown-foreground, var(--vscode-input-foreground));
+    border: 1px solid var(--vscode-dropdown-border, var(--vscode-input-border));
+    border-radius: 4px;
     padding: 4px 6px;
+    cursor: pointer;
+  }
+  select:hover:not(:disabled) {
+    border-color: var(--vscode-focusBorder, #007fd4);
+  }
+  select:focus {
+    outline: none;
+    border-color: var(--vscode-focusBorder, #007fd4);
+  }
+  select option {
+    background: var(--vscode-dropdown-background, var(--vscode-input-background));
+    color: var(--vscode-dropdown-foreground, var(--vscode-input-foreground));
   }
 </style>

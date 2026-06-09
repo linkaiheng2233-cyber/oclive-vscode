@@ -13,10 +13,10 @@
     selected = hostRoleId;
     lastSyncedRoleId = hostRoleId;
   }
-  $: roleOptions = (state.roleOptions?.length
-    ? state.roleOptions
-    : (state.roleIds ?? []).map((id) => ({ id, name: id }))
-  ).map((o) => ({ value: o.id, label: o.name }));
+  $: roleOptions = (state.roleOptions ?? []).map((o) => ({
+    value: o.id,
+    label: o.name,
+  }));
 
   function onChange(): void {
     if (selected && selected !== hostRoleId) {
