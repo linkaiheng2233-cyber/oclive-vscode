@@ -168,10 +168,19 @@ function findOclivenewnewRoot(anchors: string[]): string | undefined {
       if (fs.existsSync(marker) && fs.existsSync(roles)) {
         return dir;
       }
+      const sibling = path.join(dir, 'oclivenewnew');
+      const siblingMarker = path.join(sibling, 'src-tauri', 'Cargo.toml');
+      const siblingRoles = path.join(sibling, 'roles');
+      if (fs.existsSync(siblingMarker) && fs.existsSync(siblingRoles)) {
+        return sibling;
+      }
     }
   }
   return undefined;
 }
+
+/** Monorepo root (`oclivenewnew`) from extension path, workspace, or sibling clone. */
+export { findOclivenewnewRoot };
 
 /** Mirror host `resolve_roles_dir` priority (subset for VS Code). */
 export function discoverRolesDir(anchors: string[], envOverride?: string): string | undefined {

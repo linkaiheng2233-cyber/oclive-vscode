@@ -46,6 +46,19 @@ export function readSceneWelcome(rolePackDir: string, sceneId: string): string |
   }
 }
 
+export interface RoleOption {
+  id: string;
+  name: string;
+}
+
+/** Role folders with display names (allowlist-filtered). */
+export function listRoleOptions(rolesDir: string, allowlist?: string[]): RoleOption[] {
+  return listRoleIds(rolesDir, allowlist).map((id) => ({
+    id,
+    name: readRoleDisplayName(path.join(rolesDir, id)),
+  }));
+}
+
 /** Role pack folders under roles root that contain v2 blueprint or legacy manifest. */
 export function listRoleIds(rolesDir: string, allowlist?: string[]): string[] {
   if (!fs.existsSync(rolesDir)) {

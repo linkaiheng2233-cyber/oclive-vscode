@@ -19,6 +19,7 @@ export type OcliveSettingsKey =
   | 'penetration.letterEnabled'
   | 'penetration.heartVoiceEnabled'
   | 'chat.portraitMaxHeight'
+  | 'chat.portraitPaneHeight'
   | 'chat.inputMinHeight'
   | 'settings.placement';
 
@@ -39,6 +40,11 @@ export interface SettingsDiscoverySnapshot {
 
 export type SettingsHealthSnapshot = KernelHealthJson;
 
+export interface RoleOptionSnapshot {
+  id: string;
+  name: string;
+}
+
 export interface SettingsStateSnapshot {
   config: Record<string, unknown>;
   kernelMode: KernelMode;
@@ -48,7 +54,10 @@ export interface SettingsStateSnapshot {
   discovery: SettingsDiscoverySnapshot;
   llmSettings: LlmUserSettings | null;
   ollamaModels: string[];
+  /** @deprecated Prefer roleOptions */
   roleIds: string[];
+  roleOptions: RoleOptionSnapshot[];
+  currentRoleId: string;
   sharedAppData: string;
   initialSection?: SettingsSection;
 }
@@ -71,12 +80,19 @@ export type WebviewToHostMessage =
       remoteModel?: string;
       cloudApiStyle?: 'openai' | 'oclive_jsonrpc';
     }
-  | { type: 'setSessionModel'; model: string | null }
-  | { type: 'refreshOllamaModels' }
+  | { type: 'setSessionModel'; model: string | null; provider: 'local' | 'cloud' }
+  | { type: 'refreshOllamaModels'; ollamaBaseUrl?: string }
   | { type: 'reloadLlm' }
   | { type: 'navigateSection'; section: SettingsSection };
 
 /** Extension host → webview */
 export type HostToWebviewMessage =
   | { type: 'state'; payload: SettingsStateSnapshot }
-  | { type: 'toast'; level: 'info' | 'error'; message: string };
+  | { type: 'toast'; level: 'info' | 'error'; message: string }
+  | { type: 'ollamaModelsResult'; models: string[]; error?: string }
+  | {
+      type: 'llmOperationDone';
+      op: 'save' | 'refresh' | 'sessionModel';
+      ok: boolean;
+      message?: string;
+    };

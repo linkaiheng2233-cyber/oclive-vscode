@@ -4,6 +4,7 @@ import * as path from 'path';
 import { apiBase, OcliveConfig } from './config';
 import {
   discoverSpawnKernelCandidates,
+  findOclivenewnewRoot,
   promoteToSharedRuntime,
   type KernelCandidate,
   type KernelTier,
@@ -18,8 +19,12 @@ import {
   type KernelActionPlan,
 } from './kernelStrategy';
 import { profileHintFromPlan, profileHintKeyFromPlan } from './kernelProfileCopy';
+import { parseKernelErrorResponse, type KernelResult } from './kernelError';
 import type { LlmUserSettings, SaveLlmUserSettingsRequest } from './types/llmSettings';
 import type { RoleInfo } from './types/roleInfo';
+
+export type { KernelErrorPayload, KernelResult } from './kernelError';
+export { KernelApiError, parseKernelErrorResponse } from './kernelError';
 
 export interface KernelHealthJson {
   ok: boolean;
@@ -97,6 +102,9 @@ export interface ChatSuccess {
   personalitySource?: string;
   botEmotion?: string;
   portraitEmotion?: string;
+  /** Main dialogue LLM failed; reply is an emergency fallback string. */
+  replyIsFallback?: boolean;
+  llmFallbackReason?: string;
 }
 
 export interface ChatFailure {
@@ -213,7 +221,7 @@ export class KernelClient {
     }
 
     const plan = report.plan;
-    if (plan.action === 'attach') {
+    if (plan.action === 'attach' && !config.mockLlm) {
       if (this.spawned) {
         this.spawned = null;
       }
@@ -228,6 +236,11 @@ export class KernelClient {
         profileHintKey: profileHintKeyFromPlan(plan),
       });
       return this.mode;
+    }
+
+    if (plan.action === 'attach' && config.mockLlm) {
+      await terminateListenersOnPort(config.apiPort);
+      await sleep(400);
     }
 
     if (this.spawned) {
@@ -296,10 +309,14 @@ export class KernelClient {
     throw new Error(lastErr);
   }
 
-  /** When `oclive-cli` is unavailable: attach only if profile looks VS Code–compatible. */
+  /** When `oclive-cli` is unavailable: attach if compatible, else spawn best candidate. */
   private async ensureReadyFallback(config: OcliveConfig): Promise<KernelMode> {
     const health = await this.fetchHealthJson(config);
-    if (health?.ok && profileLikelyCompatibleForVscode(health)) {
+    if (
+      health?.ok &&
+      profileLikelyCompatibleForVscode(health) &&
+      !config.mockLlm
+    ) {
       if (this.spawned) {
         this.spawned = null;
       }
@@ -312,10 +329,43 @@ export class KernelClient {
       });
       return this.mode;
     }
+
+    const candidates = discoverCandidates(config);
+    if (candidates.length > 0) {
+      let lastErr = 'Kernel did not become ready';
+      for (const entry of candidates) {
+        const { binary, tier } = entry;
+        if (!fs.existsSync(binary)) {
+          lastErr = `Kernel binary not found: ${binary}`;
+          continue;
+        }
+        const child = this.spawnKernel({ ...config, kernelBinary: binary });
+        for (let i = 0; i < 40; i++) {
+          await sleep(500);
+          if (await this.checkHealth(config)) {
+            this.setConnection({
+              mode: 'spawned',
+              tier,
+              binary,
+              sourceLabel: `spawn（无 CLI 策略）· ${tierLabel(tier)}`,
+            });
+            return this.mode;
+          }
+        }
+        child.kill();
+        this.spawned = null;
+        lastErr = `Spawned ${binary} but /health did not become ready`;
+      }
+      this.setConnection({ mode: 'offline' });
+      throw new Error(lastErr);
+    }
+
     this.setConnection({ mode: 'offline' });
-    throw new Error(
-      '未找到 oclive-cli，无法执行内核策略。请在 oclivenewnew 根目录运行: cargo build -p oclive-cli',
-    );
+    const repoHint = findOclivenewnewRoot([config.extensionPath ?? '', process.cwd()]);
+    const buildHint = repoHint
+      ? `请在 ${repoHint} 运行: cargo build -p oclive-cli -p oclive-kernel-server`
+      : '请 clone oclivenewnew 并运行: cargo build -p oclive-cli -p oclive-kernel-server';
+    throw new Error(`未找到 oclive-cli 且无法 attach/spawn 内核。${buildHint}`);
   }
 
   private spawnKernel(config: OcliveConfig): ChildProcess {
@@ -394,6 +444,10 @@ export class KernelClient {
       return { ok: false, status: res.status, message: 'Missing reply in response' };
     }
 
+    const replyIsFallback = body.reply_is_fallback === true;
+    const llmFallbackReason =
+      typeof body.llm_fallback_reason === 'string' ? body.llm_fallback_reason : undefined;
+
     return {
       ok: true,
       reply,
@@ -404,6 +458,8 @@ export class KernelClient {
       botEmotion: typeof body.bot_emotion === 'string' ? body.bot_emotion : undefined,
       portraitEmotion:
         typeof body.portrait_emotion === 'string' ? body.portrait_emotion : undefined,
+      replyIsFallback,
+      llmFallbackReason,
     };
   }
 
@@ -498,7 +554,7 @@ export class KernelClient {
   async saveLlmUserSettings(
     req: SaveLlmUserSettingsRequest,
     config: OcliveConfig = cfg(),
-  ): Promise<RoleInfo | null> {
+  ): Promise<KernelResult<RoleInfo>> {
     await this.ensureReady(config);
     try {
       const res = await fetch(`${apiBase(config)}/llm/user_settings`, {
@@ -518,18 +574,19 @@ export class KernelClient {
         signal: AbortSignal.timeout(15000),
       });
       if (!res.ok) {
-        return null;
+        return { ok: false, error: await parseKernelErrorResponse(res) };
       }
-      return (await res.json()) as RoleInfo;
-    } catch {
-      return null;
+      return { ok: true, data: (await res.json()) as RoleInfo };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return { ok: false, error: { code: 'NETWORK_ERROR', message } };
     }
   }
 
   async listOllamaModels(
     ollamaBaseUrl?: string,
     config: OcliveConfig = cfg(),
-  ): Promise<string[]> {
+  ): Promise<KernelResult<string[]>> {
     await this.ensureReady(config);
     const params = new URLSearchParams();
     if (ollamaBaseUrl?.trim()) {
@@ -540,11 +597,12 @@ export class KernelClient {
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
       if (!res.ok) {
-        return [];
+        return { ok: false, error: await parseKernelErrorResponse(res) };
       }
-      return (await res.json()) as string[];
-    } catch {
-      return [];
+      return { ok: true, data: (await res.json()) as string[] };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return { ok: false, error: { code: 'NETWORK_ERROR', message } };
     }
   }
 
@@ -553,7 +611,7 @@ export class KernelClient {
     model: string | null,
     sessionId?: string,
     config: OcliveConfig = cfg(),
-  ): Promise<RoleInfo | null> {
+  ): Promise<KernelResult<RoleInfo>> {
     await this.ensureReady(config);
     try {
       const res = await fetch(`${apiBase(config)}/llm/session_model`, {
@@ -567,11 +625,53 @@ export class KernelClient {
         signal: AbortSignal.timeout(10000),
       });
       if (!res.ok) {
-        return null;
+        return { ok: false, error: await parseKernelErrorResponse(res) };
       }
-      return (await res.json()) as RoleInfo;
-    } catch {
-      return null;
+      return { ok: true, data: (await res.json()) as RoleInfo };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return { ok: false, error: { code: 'NETWORK_ERROR', message } };
+    }
+  }
+
+  async listHighRiskGrants(
+    config: OcliveConfig = cfg(),
+  ): Promise<KernelResult<Record<string, unknown>>> {
+    await this.ensureReady(config);
+    try {
+      const res = await fetch(`${apiBase(config)}/high_risk/grants`, {
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) {
+        return { ok: false, error: await parseKernelErrorResponse(res) };
+      }
+      return { ok: true, data: (await res.json()) as Record<string, unknown> };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return { ok: false, error: { code: 'NETWORK_ERROR', message } };
+    }
+  }
+
+  async grantHighRiskCapability(
+    kind: string,
+    id: string,
+    config: OcliveConfig = cfg(),
+  ): Promise<KernelResult<void>> {
+    await this.ensureReady(config);
+    try {
+      const res = await fetch(`${apiBase(config)}/high_risk/grant`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ kind, id }),
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) {
+        return { ok: false, error: await parseKernelErrorResponse(res) };
+      }
+      return { ok: true, data: undefined };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return { ok: false, error: { code: 'NETWORK_ERROR', message } };
     }
   }
 

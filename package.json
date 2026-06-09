@@ -92,10 +92,17 @@
           "default": ["mumu", "shimeng", "枫侵月"],
           "description": "When non-empty, only these role pack ids appear in role pickers."
         },
+        "oclive.chat.portraitPaneHeight": {
+          "type": "number",
+          "default": 180,
+          "minimum": 96,
+          "maximum": 420,
+          "description": "Chat portrait pane height in px. Drag the splitter in Chat or adjust in Settings → Layout."
+        },
         "oclive.chat.portraitMaxHeight": {
           "type": "number",
-          "default": 0,
-          "description": "Chat portrait max height in px (0 = small avatar only)."
+          "default": 32,
+          "description": "Deprecated: use oclive.chat.portraitPaneHeight. Legacy values ≤32 map to 180px pane height."
         },
         "oclive.chat.inputMinHeight": {
           "type": "number",

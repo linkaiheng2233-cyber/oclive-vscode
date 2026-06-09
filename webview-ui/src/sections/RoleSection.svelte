@@ -5,13 +5,21 @@
   export let state: SettingsStateSnapshot;
   export let post: (msg: unknown) => void;
 
-  let selected = String(state.config.roleId ?? '');
+  let selected = String(state.currentRoleId ?? state.config.roleId ?? '');
+  let lastSyncedRoleId = selected;
 
-  $: selected = String(state.config.roleId ?? '');
-  $: roleOptions = state.roleIds.map((id) => ({ value: id, label: id }));
+  $: hostRoleId = String(state.currentRoleId ?? state.config.roleId ?? '');
+  $: if (hostRoleId !== lastSyncedRoleId) {
+    selected = hostRoleId;
+    lastSyncedRoleId = hostRoleId;
+  }
+  $: roleOptions = (state.roleOptions?.length
+    ? state.roleOptions
+    : (state.roleIds ?? []).map((id) => ({ id, name: id }))
+  ).map((o) => ({ value: o.id, label: o.name }));
 
   function onChange(): void {
-    if (selected && selected !== state.config.roleId) {
+    if (selected && selected !== hostRoleId) {
       post({ type: 'selectRole', roleId: selected });
     }
   }

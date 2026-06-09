@@ -1,7 +1,6 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { ChatViewProvider } from './chatViewProvider';
-import { rolePackPath } from './config';
 import { applyAutoDiscovery, getEffectiveConfig, setExtensionPath } from './runtimeConfig';
 import { KernelClient } from './kernelClient';
 import { listRoleIds, readRoleDisplayName } from './rolePack';
@@ -114,12 +113,10 @@ export function activate(context: vscode.ExtensionContext): void {
       if (!picked) {
         return;
       }
-      const roleId = picked.label;
-      await cfg.update('roleId', roleId, vscode.ConfigurationTarget.Global);
-      await chatProvider?.reloadRolePack();
-      void vscode.window.showInformationMessage(
-        `当前角色：${readRoleDisplayName(rolePackPath(getEffectiveConfig()))} (${roleId})`,
-      );
+      const result = await chatProvider?.switchRole(picked.label);
+      if (result) {
+        void vscode.window.showInformationMessage(result.message);
+      }
     }),
   );
 

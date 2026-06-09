@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { promisify } from 'util';
 import type { OcliveConfig } from './config';
-import { discoverSpawnKernelCandidates, type KernelTier } from './discovery';
+import { discoverSpawnKernelCandidates, findOclivenewnewRoot, type KernelTier } from './discovery';
 import { isKnownDistributionKernel } from './kernelPort';
 
 const execFileAsync = promisify(execFile);
@@ -59,38 +59,23 @@ export interface EnsureReport {
   running_distro_id?: string | null;
 }
 
-function findMonorepoRoot(anchors: string[]): string | undefined {
-  for (const anchor of anchors) {
-    let cur = path.resolve(anchor);
-    for (let i = 0; i < 8; i++) {
-      const marker = path.join(cur, 'src-tauri', 'Cargo.toml');
-      const roles = path.join(cur, 'roles');
-      if (fs.existsSync(marker) && fs.existsSync(roles)) {
-        return cur;
-      }
-      const parent = path.dirname(cur);
-      if (parent === cur) {
-        break;
-      }
-      cur = parent;
-    }
-  }
-  return undefined;
-}
-
 function cliExe(base: string): string {
   return process.platform === 'win32' ? `${base}.exe` : base;
 }
 
+function cliSearchRoots(repoRoot: string): string[] {
+  return [
+    path.join(repoRoot, '..', 'oclive-dev-artifacts', 'oclivenewnew-cargo-target'),
+    path.join(repoRoot, 'target'),
+    path.join(repoRoot, '..', 'target'),
+  ];
+}
+
 /** Locate built `oclive-cli` (monorepo dev) or PATH. */
 export function findOcliveCli(extensionPath: string, cwd = process.cwd()): string | undefined {
-  const repo = findMonorepoRoot([extensionPath, cwd]);
+  const repo = findOclivenewnewRoot([extensionPath, cwd]);
   if (repo) {
-    const roots = [
-      path.join(repo, '..', 'oclive-dev-artifacts', 'oclivenewnew-cargo-target'),
-      path.join(repo, 'target'),
-    ];
-    for (const root of roots) {
+    for (const root of cliSearchRoots(repo)) {
       for (const profile of ['debug', 'release']) {
         const candidate = path.join(root, profile, cliExe('oclive-cli'));
         if (fs.existsSync(candidate)) {
@@ -106,12 +91,13 @@ export async function resolveKernelPlan(
   config: OcliveConfig,
   opts: { allowReplace: boolean },
 ): Promise<EnsureReport | undefined> {
-  const cli = findOcliveCli(config.extensionPath ?? '', process.cwd());
+  const anchors = [config.extensionPath ?? '', process.cwd()];
+  const cli = findOcliveCli(anchors[0], anchors[1]);
   if (!cli) {
     return undefined;
   }
 
-  const repoRoot = findMonorepoRoot([config.extensionPath ?? '', process.cwd()]) ?? process.cwd();
+  const repoRoot = findOclivenewnewRoot(anchors) ?? process.cwd();
   const bundled = config.kernelFallbackBinary?.trim();
   const args = [
     'kernel',

@@ -25,6 +25,16 @@
   let state: SettingsStateSnapshot | null = null;
   let toast = '';
   let activeSection: SettingsSection = 'kernel';
+  let ollamaModelsResult: Extract<
+    HostToWebviewMessage,
+    { type: 'ollamaModelsResult' }
+  > | null = null;
+  let llmOperationDone: Extract<
+    HostToWebviewMessage,
+    { type: 'llmOperationDone' }
+  > | null = null;
+  let llmOpSeq = 0;
+  let ollamaModelsSeq = 0;
 
   function post(msg: unknown): void {
     vscode.postMessage(msg);
@@ -47,6 +57,14 @@
         if (msg.payload.initialSection) {
           activeSection = msg.payload.initialSection;
         }
+      }
+      if (msg.type === 'ollamaModelsResult') {
+        ollamaModelsSeq += 1;
+        ollamaModelsResult = msg;
+      }
+      if (msg.type === 'llmOperationDone') {
+        llmOpSeq += 1;
+        llmOperationDone = msg;
       }
       if (msg.type === 'toast') {
         toast = msg.message;
@@ -90,7 +108,14 @@
         {:else if activeSection === 'identity'}
           <IdentitySection {state} {post} />
         {:else if activeSection === 'model'}
-          <ModelSection {state} {post} />
+          <ModelSection
+            {state}
+            {post}
+            {ollamaModelsResult}
+            {llmOperationDone}
+            {llmOpSeq}
+            ollamaModelsSeq={ollamaModelsSeq}
+          />
         {:else if activeSection === 'layout'}
           <LayoutSection {state} {post} />
         {:else if activeSection === 'advanced'}
