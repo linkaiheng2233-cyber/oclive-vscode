@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { applyUserIdentitySelection, SCENE_ID } from './identityHelper';
 import { getSharedAppDataHint, KernelClient } from './kernelClient';
 import type { KernelResult } from './kernelError';
-import { getEffectiveConfig } from './runtimeConfig';
+import { applyAutoDiscovery, getEffectiveConfig } from './runtimeConfig';
 import { listRoleOptions } from './rolePack';
 import { emitSettingsChanged, takePendingSettingsSection } from './settingsEvents';
 import { resolvePortraitPaneHeight } from './chatLayoutConfig';
@@ -152,14 +152,14 @@ export class SettingsController {
       case 'updateConfig':
         await this.handleUpdateConfig(msg.key, msg.value);
         break;
-      case 'selectRole':
-        await this.handleSelectRole(msg.roleId);
-        break;
       case 'setIdentity':
         await this.handleSetIdentity(msg.identityId);
         break;
       case 'reconnectKernel':
         await this.handleReconnect();
+        break;
+      case 'rediscover':
+        await this.handleRediscover();
         break;
       case 'saveLlmSettings':
         await this.handleSaveLlmSettings(msg);
@@ -201,20 +201,6 @@ export class SettingsController {
     await this.pushState();
   }
 
-  private async handleSelectRole(roleId: string): Promise<void> {
-    // `switchRole` already calls `pushState()` when a settings surface is open,
-    // so we must NOT push again here (that doubled the snapshot work per switch).
-    const result = await this.getChatProvider()?.switchRole(roleId);
-    if (!result) {
-      return;
-    }
-    this.postMessage({
-      type: 'toast',
-      level: result.ok ? 'info' : 'error',
-      message: result.message,
-    });
-  }
-
   private async handleSetIdentity(identityId: string): Promise<void> {
     const ok = await applyUserIdentitySelection(this.kernel, identityId);
     if (ok) {
@@ -238,6 +224,26 @@ export class SettingsController {
         level: 'info',
         message: `内核：${this.kernel.connectionMode} (:${eff.apiPort})`,
       });
+    } catch (e) {
+      this.getStatusBar()?.syncFromClient(eff.apiPort, eff.extensionPath);
+      const message = e instanceof Error ? e.message : String(e);
+      this.postMessage({ type: 'toast', level: 'error', message });
+    }
+    emitSettingsChanged();
+    await this.pushState();
+  }
+
+  private async handleRediscover(): Promise<void> {
+    const discovered = await applyAutoDiscovery(this.context, { forcePrompt: true });
+    const eff = getEffectiveConfig();
+    try {
+      this.kernel.invalidateEnsureReady();
+      await this.kernel.ensureReady(eff, { force: true });
+      this.getStatusBar()?.syncFromClient(eff.apiPort, eff.extensionPath);
+      const msg = discovered
+        ? `已重新发现：角色库 ${eff.rolesDir || '（未配置）'} · 内核：${this.kernel.connectionMode}`
+        : '未发现新路径；已按当前配置重连内核';
+      this.postMessage({ type: 'toast', level: 'info', message: msg });
     } catch (e) {
       this.getStatusBar()?.syncFromClient(eff.apiPort, eff.extensionPath);
       const message = e instanceof Error ? e.message : String(e);

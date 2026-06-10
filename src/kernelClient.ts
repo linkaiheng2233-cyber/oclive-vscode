@@ -93,6 +93,8 @@ export interface ChatRequest {
   message: string;
   sessionId: string;
   sceneId: string;
+  /** Optional caller abort; combined with a 120s timeout via `AbortSignal.any`. */
+  signal?: AbortSignal;
 }
 
 export interface ChatSuccess {
@@ -106,6 +108,8 @@ export interface ChatSuccess {
   /** Main dialogue LLM failed; reply is an emergency fallback string. */
   replyIsFallback?: boolean;
   llmFallbackReason?: string;
+  userMessageId?: string;
+  assistantMessageId?: string;
 }
 
 export interface ChatFailure {
@@ -116,6 +120,21 @@ export interface ChatFailure {
 }
 
 export type ChatResult = ChatSuccess | ChatFailure;
+
+export interface ChatStreamCallbacks {
+  onToken: (token: string) => void;
+  signal?: AbortSignal;
+}
+
+export interface ChatStreamResult extends ChatSuccess {
+  ok: true;
+}
+
+export type ChatStreamOutcome = ChatStreamResult | ChatFailure;
+
+export type ChatStorageOp =
+  | { op: 'delete_message'; message_id: string }
+  | { op: 'edit_message'; message_id: string; new_content: string };
 
 export interface RoleSnapshot {
   role_id: string;
@@ -153,6 +172,8 @@ export class KernelClient {
   private connectionInfo: KernelConnectionInfo = { mode: 'offline' };
   private ensureReadyCachedAt = 0;
   private ensureReadyInFlight: Promise<KernelMode> | null = null;
+  /** Set once a kernel 404s on `/chat/stream`, so we skip the round-trip and go straight to `/chat`. */
+  private chatStreamUnsupported = false;
 
   get connectionMode(): KernelMode {
     return this.mode;
@@ -162,6 +183,8 @@ export class KernelClient {
   invalidateEnsureReady(): void {
     this.ensureReadyCachedAt = 0;
     this.ensureReadyInFlight = null;
+    // A re-plan may attach/spawn a newer kernel; re-probe streaming support.
+    this.chatStreamUnsupported = false;
   }
 
   getConnectionInfo(): KernelConnectionInfo {
@@ -466,6 +489,11 @@ export class KernelClient {
   async chat(req: ChatRequest, config: OcliveConfig = cfg()): Promise<ChatResult> {
     await this.ensureReady(config);
 
+    const timeout = AbortSignal.timeout(120_000);
+    const signal = req.signal
+      ? AbortSignal.any([req.signal, timeout])
+      : timeout;
+
     const res = await fetch(`${apiBase(config)}/chat`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -475,7 +503,7 @@ export class KernelClient {
         session_id: req.sessionId,
         scene_id: req.sceneId,
       }),
-      signal: AbortSignal.timeout(120_000),
+      signal,
     });
 
     const body = (await res.json()) as Record<string, unknown>;
@@ -486,11 +514,17 @@ export class KernelClient {
         this.setConnection({ mode: 'offline' });
       }
       const err = body.error as { code?: string; message?: string } | undefined;
+      // 404 on the core /chat route means the running server is not a compatible
+      // OCLive kernel (stale binary or a non-OCLive process on this port).
+      const fallbackMessage =
+        res.status === 404
+          ? '内核不支持 /chat 接口（可能是过期内核或非 OCLive 进程占用了该端口）。请在设置→内核重新发现/重连，或重新构建内核。'
+          : `HTTP ${res.status}`;
       return {
         ok: false,
         status: res.status,
         code: err?.code,
-        message: err?.message ?? `HTTP ${res.status}`,
+        message: err?.message ?? fallbackMessage,
       };
     }
 
@@ -515,7 +549,274 @@ export class KernelClient {
         typeof body.portrait_emotion === 'string' ? body.portrait_emotion : undefined,
       replyIsFallback,
       llmFallbackReason,
+      userMessageId:
+        typeof body.user_message_id === 'string' ? body.user_message_id : undefined,
+      assistantMessageId:
+        typeof body.assistant_message_id === 'string' ? body.assistant_message_id : undefined,
     };
+  }
+
+  async chatStream(
+    req: ChatRequest,
+    callbacks: ChatStreamCallbacks,
+    config: OcliveConfig = cfg(),
+  ): Promise<ChatStreamOutcome> {
+    await this.ensureReady(config);
+
+    // Degradation chain: older kernels lack POST /chat/stream. Once we learn the
+    // attached kernel doesn't have it, skip straight to the non-stream /chat.
+    if (this.chatStreamUnsupported) {
+      return this.chatViaNonStream(req, callbacks, config);
+    }
+
+    const timeout = AbortSignal.timeout(120_000);
+    const signal = callbacks.signal
+      ? AbortSignal.any([callbacks.signal, timeout])
+      : req.signal
+        ? AbortSignal.any([req.signal, timeout])
+        : timeout;
+
+    const res = await fetch(`${apiBase(config)}/chat/stream`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
+      body: JSON.stringify({
+        role_path: req.rolePath,
+        message: req.message,
+        session_id: req.sessionId,
+        scene_id: req.sceneId,
+      }),
+      signal,
+    });
+
+    // Route missing (stale / minimal kernel): fall back to non-stream /chat
+    // instead of surfacing a cryptic "HTTP 404" to the user.
+    if (res.status === 404) {
+      this.chatStreamUnsupported = true;
+      return this.chatViaNonStream(req, callbacks, config);
+    }
+
+    if (!res.ok) {
+      let code: string | undefined;
+      let message = `HTTP ${res.status}`;
+      try {
+        const body = (await res.json()) as { error?: { code?: string; message?: string } };
+        code = body.error?.code;
+        message = body.error?.message ?? message;
+      } catch {
+        /* non-json error body */
+      }
+      if (res.status >= 500 || res.status === 0) {
+        this.invalidateEnsureReady();
+        this.setConnection({ mode: 'offline' });
+      }
+      return { ok: false, status: res.status, code, message };
+    }
+
+    const reader = res.body?.getReader();
+    if (!reader) {
+      return { ok: false, status: res.status, message: 'Missing response body for SSE' };
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const streamState = { donePayload: null as Record<string, unknown> | null };
+
+    const consumeEvent = (block: string): void => {
+      const lines = block.split('\n');
+      let eventName = 'message';
+      const dataLines: string[] = [];
+      for (const line of lines) {
+        if (line.startsWith('event:')) {
+          eventName = line.slice(6).trim();
+        } else if (line.startsWith('data:')) {
+          dataLines.push(line.slice(5).trim());
+        }
+      }
+      if (!dataLines.length) {
+        return;
+      }
+      const data = dataLines.join('\n');
+      if (eventName === 'token') {
+        try {
+          const parsed = JSON.parse(data) as { token?: string };
+          if (typeof parsed.token === 'string' && parsed.token.length) {
+            callbacks.onToken(parsed.token);
+          }
+        } catch {
+          callbacks.onToken(data);
+        }
+        return;
+      }
+      if (eventName === 'done') {
+        try {
+          streamState.donePayload = JSON.parse(data) as Record<string, unknown>;
+        } catch {
+          streamState.donePayload = { reply: data };
+        }
+      }
+    };
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        let splitAt = buffer.indexOf('\n\n');
+        while (splitAt >= 0) {
+          const block = buffer.slice(0, splitAt);
+          buffer = buffer.slice(splitAt + 2);
+          if (block.trim()) {
+            consumeEvent(block);
+          }
+          splitAt = buffer.indexOf('\n\n');
+        }
+      }
+      if (buffer.trim()) {
+        consumeEvent(buffer);
+      }
+    } catch (e) {
+      if (callbacks.signal?.aborted || req.signal?.aborted) {
+        return { ok: false, status: 499, code: 'ABORTED', message: 'Generation aborted' };
+      }
+      const msg = e instanceof Error ? e.message : String(e);
+      return { ok: false, status: 0, message: msg };
+    }
+
+    const donePayload = streamState.donePayload;
+    if (!donePayload) {
+      return { ok: false, status: res.status, message: 'Missing done event in SSE stream' };
+    }
+
+    const reply = donePayload.reply;
+    if (typeof reply !== 'string' || !reply.length) {
+      return { ok: false, status: res.status, message: 'Missing reply in done event' };
+    }
+
+    return {
+      ok: true,
+      reply,
+      sessionId:
+        typeof donePayload.session_id === 'string' ? donePayload.session_id : undefined,
+      sceneId: typeof donePayload.scene_id === 'string' ? donePayload.scene_id : undefined,
+      personalitySource:
+        typeof donePayload.personality_source === 'string'
+          ? donePayload.personality_source
+          : undefined,
+      botEmotion:
+        typeof donePayload.bot_emotion === 'string' ? donePayload.bot_emotion : undefined,
+      portraitEmotion:
+        typeof donePayload.portrait_emotion === 'string'
+          ? donePayload.portrait_emotion
+          : undefined,
+      replyIsFallback: donePayload.reply_is_fallback === true,
+      llmFallbackReason:
+        typeof donePayload.llm_fallback_reason === 'string'
+          ? donePayload.llm_fallback_reason
+          : undefined,
+      userMessageId:
+        typeof donePayload.user_message_id === 'string'
+          ? donePayload.user_message_id
+          : undefined,
+      assistantMessageId:
+        typeof donePayload.assistant_message_id === 'string'
+          ? donePayload.assistant_message_id
+          : undefined,
+    };
+  }
+
+  /** Non-stream fallback used when a kernel lacks POST /chat/stream. */
+  private async chatViaNonStream(
+    req: ChatRequest,
+    callbacks: ChatStreamCallbacks,
+    config: OcliveConfig,
+  ): Promise<ChatStreamOutcome> {
+    const result = await this.chat(
+      { ...req, signal: callbacks.signal ?? req.signal },
+      config,
+    );
+    if (result.ok) {
+      // Surface the full reply once so the chat UI fills in just like a stream.
+      try {
+        callbacks.onToken(result.reply);
+      } catch {
+        /* UI callback must never break the result */
+      }
+    }
+    return result;
+  }
+
+  async chatStorage(
+    op: ChatStorageOp,
+    config: OcliveConfig = cfg(),
+  ): Promise<{ ok: boolean; error?: string }> {
+    await this.ensureReady(config);
+    try {
+      const res = await fetch(`${apiBase(config)}/chat/storage`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(op),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: { message?: string };
+        };
+        return { ok: false, error: body.error?.message ?? `HTTP ${res.status}` };
+      }
+      return { ok: true };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { ok: false, error: msg };
+    }
+  }
+
+  async deleteMessage(messageId: string, config: OcliveConfig = cfg()): Promise<boolean> {
+    const res = await this.chatStorage({ op: 'delete_message', message_id: messageId }, config);
+    return res.ok;
+  }
+
+  async editMessage(
+    messageId: string,
+    newContent: string,
+    config: OcliveConfig = cfg(),
+  ): Promise<boolean> {
+    const res = await this.chatStorage(
+      { op: 'edit_message', message_id: messageId, new_content: newContent },
+      config,
+    );
+    return res.ok;
+  }
+
+  /** Warm up a local Ollama model (no-op when provider is cloud). */
+  async warmupModel(
+    ollamaBaseUrl: string,
+    model: string,
+    keepAlive: string,
+    config: OcliveConfig = cfg(),
+  ): Promise<void> {
+    const base = ollamaBaseUrl.trim().replace(/\/$/, '');
+    const name = model.trim();
+    if (!base || !name) {
+      return;
+    }
+    try {
+      await fetch(`${base}/api/generate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: name,
+          prompt: ' ',
+          stream: false,
+          keep_alive: keepAlive,
+        }),
+        signal: AbortSignal.timeout(120_000),
+      });
+    } catch (e) {
+      console.warn('[oclive] model warmup failed', e);
+      void config;
+    }
   }
 
   async fetchRoleSnapshot(

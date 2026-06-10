@@ -8,6 +8,8 @@ export type AppView = 'chat' | 'settings';
 export interface ChatLine {
   role: 'user' | 'assistant' | 'system';
   text: string;
+  /** SQLite message id when loaded from kernel storage. */
+  id?: string;
   dismissible?: boolean;
 }
 
@@ -35,6 +37,10 @@ export interface ChatPatchPayload {
   lines?: ChatLine[];
   /** Append-only delta; webview merges without rebuilding prior rows. */
   appendLines?: ChatLine[];
+  /** In-progress assistant reply during SSE streaming; `null` clears the bubble. */
+  streamingReply?: string | null;
+  /** Elapsed seconds while waiting for LLM (loading animation). */
+  thinkingSeconds?: number;
 }
 
 /** Settings keys writable from the settings webview. */
@@ -91,6 +97,11 @@ export type WebviewToHostMessage =
   | { type: 'closeSettings' }
   | { type: 'openSettings'; section?: SettingsSection }
   | { type: 'send'; text: string }
+  | { type: 'stopGeneration' }
+  | { type: 'undoTurn' }
+  | { type: 'regenerate' }
+  | { type: 'editResend'; messageId: string; newText: string }
+  | { type: 'deleteMessage'; messageId: string }
   | { type: 'newChat' }
   | { type: 'selectRole'; roleId: string }
   | { type: 'resizePortraitPane'; height: number }
@@ -98,6 +109,7 @@ export type WebviewToHostMessage =
   | { type: 'updateConfig'; key: OcliveSettingsKey; value: unknown }
   | { type: 'setIdentity'; identityId: string }
   | { type: 'reconnectKernel' }
+  | { type: 'rediscover' }
   | {
       type: 'saveLlmSettings';
       provider: 'local' | 'cloud';

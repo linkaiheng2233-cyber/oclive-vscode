@@ -104,6 +104,21 @@
           "default": 52,
           "description": "Chat input textarea minimum height in px."
         },
+        "oclive.chat.streaming": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use POST /chat/stream for token-by-token rendering; false falls back to /chat."
+        },
+        "oclive.chat.warmupModel": {
+          "type": "boolean",
+          "default": true,
+          "description": "Pre-warm local Ollama model after bootstrap or role switch (provider=local only)."
+        },
+        "oclive.chat.warmupKeepAlive": {
+          "type": "string",
+          "default": "10m",
+          "description": "Ollama keep_alive passed to warmup generate (e.g. 10m, 30m)."
+        },
         "oclive.settings.placement": {
           "type": "string",
           "enum": ["sidebar", "editor-beside"],

@@ -24,20 +24,34 @@
   <p class="hint">当前内核可能由桌面端启动；发行版 profile 由已运行内核决定。</p>
 {/if}
 <p class="row mono">kernel: {state.discovery.kernelBinary || '（自动发现）'}</p>
-<button type="button" on:click={() => post({ type: 'reconnectKernel' })}>重连内核</button>
+<div class="actions">
+  <button type="button" on:click={() => post({ type: 'reconnectKernel' })}>重连内核</button>
+  <button type="button" class="secondary" on:click={() => post({ type: 'rediscover' })}>
+    重新发现…
+  </button>
+</div>
 
 <style>
   .title { font-size: 1em; margin: 0 0 10px; font-weight: 600; }
   .row { margin: 4px 0; font-size: 0.9em; }
   .mono { font-family: var(--vscode-editor-font-family); word-break: break-all; }
   .hint { font-size: 0.85em; opacity: 0.8; margin: 8px 0; }
-  button {
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
     margin-top: 8px;
+  }
+  button {
     padding: 4px 10px;
     cursor: pointer;
     background: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
     border: none;
     border-radius: 3px;
+  }
+  button.secondary {
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
   }
 </style>

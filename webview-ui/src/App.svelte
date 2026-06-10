@@ -124,7 +124,7 @@
           {:else if activeSection === 'editor'}
             <EditorSection {state} {post} />
           {:else if activeSection === 'role'}
-            <RoleSection {state} {post} />
+            <RoleSection {state} />
           {:else if activeSection === 'identity'}
             <IdentitySection {state} {post} />
           {:else if activeSection === 'model'}

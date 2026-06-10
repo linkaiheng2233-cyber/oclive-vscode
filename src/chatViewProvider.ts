@@ -6,9 +6,11 @@ import { getEffectiveConfig } from './runtimeConfig';
 import { getSharedAppDataHint, KernelClient, type StoredMessage } from './kernelClient';
 import {
   listRoleOptions,
+  readMetaActionTemplates,
   readRoleDisplayName,
   readSceneWelcome,
   resolveEmotionImagePath,
+  type MetaActionTemplates,
   type RoleOption,
 } from './rolePack';
 import { emitSettingsChanged } from './settingsEvents';
@@ -39,7 +41,7 @@ function storedMessageToLine(msg: StoredMessage): ChatLine {
   const sender = msg.sender.toLowerCase();
   const role: ChatLine['role']
     = sender === 'user' ? 'user' : sender === 'assistant' ? 'assistant' : 'system';
-  return { role, text: msg.content };
+  return { role, text: msg.content, id: msg.id };
 }
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -74,6 +76,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private resizeDebounceTimer: ReturnType<typeof setTimeout> | undefined;
   private editorSub?: vscode.Disposable;
   private visibilitySub?: vscode.Disposable;
+  private sendAbort?: AbortController;
+  private thinkingTimer?: ReturnType<typeof setInterval>;
+  private thinkingSeconds = 0;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -130,6 +135,21 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         break;
       case 'send':
         await this.handleSend(msg.text.trim());
+        break;
+      case 'stopGeneration':
+        this.handleStop();
+        break;
+      case 'undoTurn':
+        await this.handleUndoTurn();
+        break;
+      case 'regenerate':
+        await this.handleRegenerate();
+        break;
+      case 'editResend':
+        await this.handleEditResend(msg.messageId, msg.newText);
+        break;
+      case 'deleteMessage':
+        await this.handleDeleteMessage(msg.messageId);
         break;
       case 'openSettings':
         await this.openSettings(msg.section);
@@ -470,6 +490,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         await this.settingsController.pushState();
       }
 
+      void this.maybeWarmupModel();
+
       return { ok: loaded, message };
     } finally {
       // Keep the guard held across the whole operation (incl. pushState) so a
@@ -556,6 +578,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
     await this.refreshKernelStatus();
     await this.loadChatHistory();
+    void this.maybeWarmupModel();
     if (!this.welcomed && config.rolesDir) {
       const pack = rolePackPath(config);
       const welcome = readSceneWelcome(pack, SCENE_ID);
@@ -788,7 +811,223 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }, 300);
   }
 
-  private async handleSend(userText: string): Promise<void> {
+  private chatConfig(): vscode.WorkspaceConfiguration {
+    return vscode.workspace.getConfiguration('oclive');
+  }
+
+  private streamingEnabled(): boolean {
+    return this.chatConfig().get<boolean>('chat.streaming') ?? true;
+  }
+
+  private metaTemplates(): MetaActionTemplates {
+    const config = getEffectiveConfig();
+    if (!config.rolesDir) {
+      return readMetaActionTemplates('');
+    }
+    return readMetaActionTemplates(rolePackPath(config));
+  }
+
+  private startThinkingTimer(): void {
+    this.stopThinkingTimer();
+    this.thinkingSeconds = 0;
+    this.thinkingTimer = setInterval(() => {
+      this.thinkingSeconds += 1;
+      this.postChatPatch({ thinkingSeconds: this.thinkingSeconds });
+    }, 1000);
+  }
+
+  private stopThinkingTimer(): void {
+    if (this.thinkingTimer) {
+      clearInterval(this.thinkingTimer);
+      this.thinkingTimer = undefined;
+    }
+    this.thinkingSeconds = 0;
+  }
+
+  private handleStop(): void {
+    if (!this.sending) {
+      return;
+    }
+    this.sendAbort?.abort();
+  }
+
+  private async maybeWarmupModel(): Promise<void> {
+    const cfg = this.chatConfig();
+    if (!(cfg.get<boolean>('chat.warmupModel') ?? true)) {
+      return;
+    }
+    const config = getEffectiveConfig();
+    if (!config.rolesDir) {
+      return;
+    }
+    try {
+      const roleId = this.currentRoleIdFromConfig();
+      const sessionId = this.context.globalState.get<string>(SESSION_KEY);
+      const llm = await this.kernel.getLlmUserSettings(roleId, sessionId, config);
+      if (!llm || llm.provider !== 'local') {
+        return;
+      }
+      const model = llm.effectiveModel?.trim();
+      const base = llm.ollamaBaseUrl?.trim();
+      if (!model || !base) {
+        return;
+      }
+      const keepAlive = cfg.get<string>('chat.warmupKeepAlive') ?? '10m';
+      void this.kernel.warmupModel(base, model, keepAlive, config);
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  private async fetchStoredMessages(): Promise<StoredMessage[]> {
+    const config = getEffectiveConfig();
+    return this.kernel.fetchChatMessages(this.sessionId(), config);
+  }
+
+  private attitudeText(
+    key: keyof MetaActionTemplates,
+  ): string | undefined {
+    const tpl = this.metaTemplates()[key];
+    if (!tpl.enabled) {
+      return undefined;
+    }
+    const text = tpl.attitudeText.trim();
+    return text.length ? text : undefined;
+  }
+
+  private async injectAttitudeAndSend(attitude: string | undefined): Promise<void> {
+    if (!attitude) {
+      return;
+    }
+    await this.handleSend(attitude, { skipUserLine: true });
+  }
+
+  private async handleUndoTurn(): Promise<void> {
+    if (this.sending) {
+      return;
+    }
+    const messages = await this.fetchStoredMessages();
+    if (messages.length < 2) {
+      return;
+    }
+    const last = messages[messages.length - 1];
+    const prev = messages[messages.length - 2];
+    const config = getEffectiveConfig();
+    if (!(await this.kernel.deleteMessage(last.id, config))) {
+      return;
+    }
+    if (prev.sender.toLowerCase() === 'user') {
+      await this.kernel.deleteMessage(prev.id, config);
+    }
+    await this.loadChatHistory();
+    this.postChatPatch({ lines: [...this.lines] });
+    await this.injectAttitudeAndSend(this.attitudeText('undo'));
+  }
+
+  private async handleRegenerate(): Promise<void> {
+    if (this.sending) {
+      return;
+    }
+    const messages = await this.fetchStoredMessages();
+    if (messages.length < 2) {
+      return;
+    }
+    const last = messages[messages.length - 1];
+    const prev = messages[messages.length - 2];
+    if (prev.sender.toLowerCase() !== 'user') {
+      return;
+    }
+    const userText = prev.content;
+    const config = getEffectiveConfig();
+    await this.kernel.deleteMessage(last.id, config);
+    await this.kernel.deleteMessage(prev.id, config);
+    await this.loadChatHistory();
+    this.postChatPatch({ lines: [...this.lines] });
+    const attitude = this.attitudeText('regenerate');
+    const payload = attitude ? `${userText}\n\n${attitude}` : userText;
+    await this.handleSend(payload, { skipUserLine: true, displayText: userText });
+  }
+
+  private async handleEditResend(messageId: string, newText: string): Promise<void> {
+    if (this.sending || !messageId || !newText.trim()) {
+      return;
+    }
+    const messages = await this.fetchStoredMessages();
+    const idx = messages.findIndex((m) => m.id === messageId);
+    if (idx < 0 || messages[idx].sender.toLowerCase() !== 'user') {
+      return;
+    }
+    const config = getEffectiveConfig();
+    for (let i = messages.length - 1; i >= idx; i--) {
+      await this.kernel.deleteMessage(messages[i].id, config);
+    }
+    await this.loadChatHistory();
+    this.postChatPatch({ lines: [...this.lines] });
+    const attitude = this.attitudeText('edit');
+    const payload = attitude ? `${newText.trim()}\n\n${attitude}` : newText.trim();
+    await this.handleSend(payload, { skipUserLine: true, displayText: newText.trim() });
+  }
+
+  private async handleDeleteMessage(messageId: string): Promise<void> {
+    if (this.sending || !messageId) {
+      return;
+    }
+    const config = getEffectiveConfig();
+    if (!(await this.kernel.deleteMessage(messageId, config))) {
+      return;
+    }
+    await this.loadChatHistory();
+    this.postChatPatch({ lines: [...this.lines] });
+    await this.injectAttitudeAndSend(this.attitudeText('delete'));
+  }
+
+  private applyChatSuccess(
+    result: {
+      reply: string;
+      sessionId?: string;
+      botEmotion?: string;
+      portraitEmotion?: string;
+      replyIsFallback?: boolean;
+      llmFallbackReason?: string;
+      userMessageId?: string;
+      assistantMessageId?: string;
+    },
+    config: ReturnType<typeof getEffectiveConfig>,
+    userLineIndex: number,
+    appended: ChatLine[],
+  ): void {
+    if (result.sessionId) {
+      void this.context.globalState.update(SESSION_KEY, result.sessionId);
+    }
+    this.statusBar.syncFromClient(config.apiPort, config.extensionPath);
+    const emotion = result.portraitEmotion || result.botEmotion || 'neutral';
+    this.refreshPortraitForCurrentRole(emotion);
+    const userLine = this.lines[userLineIndex];
+    if (userLine && result.userMessageId) {
+      userLine.id = result.userMessageId;
+    }
+    const assistantLine: ChatLine = {
+      role: 'assistant',
+      text: result.reply,
+      id: result.assistantMessageId,
+    };
+    this.lines.push(assistantLine);
+    appended.push(assistantLine);
+    if (result.replyIsFallback) {
+      const reason = result.llmFallbackReason?.trim();
+      const hint = reason
+        ? `模型未连通（${reason}）。请在设置 → 模型中检查 Ollama / 云端配置。`
+        : '模型未连通，当前为应急回复。请在设置 → 模型中检查配置。';
+      const hintLine: ChatLine = { role: 'system', text: hint, dismissible: true };
+      this.lines.push(hintLine);
+      appended.push(hintLine);
+    }
+  }
+
+  private async handleSend(
+    userText: string,
+    opts?: { skipUserLine?: boolean; displayText?: string },
+  ): Promise<void> {
     if (!userText || this.sending) {
       return;
     }
@@ -799,64 +1038,97 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     const pack = rolePackPath(config);
-    const prefix = this.buildEditorContext();
+    const prefix = opts?.skipUserLine ? '' : this.buildEditorContext();
     const payload = prefix ? prefix + userText : userText;
+    const visibleText = opts?.displayText ?? userText;
 
-    const userLine: ChatLine = { role: 'user', text: userText };
-    this.lines.push(userLine);
+    let userLineIndex = -1;
+    if (!opts?.skipUserLine) {
+      const userLine: ChatLine = { role: 'user', text: visibleText };
+      this.lines.push(userLine);
+      userLineIndex = this.lines.length - 1;
+    } else {
+      const userLine: ChatLine = { role: 'user', text: visibleText };
+      this.lines.push(userLine);
+      userLineIndex = this.lines.length - 1;
+    }
+
+    this.sendAbort = new AbortController();
     this.sending = true;
-    this.postChatPatch({ appendLines: [userLine], sending: true });
+    this.startThinkingTimer();
+    this.postChatPatch({
+      appendLines: [this.lines[userLineIndex]],
+      sending: true,
+      streamingReply: null,
+      thinkingSeconds: 0,
+    });
 
     const appended: ChatLine[] = [];
+    let streamBuf = '';
+    const useStream = this.streamingEnabled();
+
     try {
-      const result = await this.kernel.chat({
+      const baseReq = {
         rolePath: pack,
         message: payload,
         sessionId: this.sessionId(),
         sceneId: SCENE_ID,
-      });
+        signal: this.sendAbort.signal,
+      };
+
+      const result = useStream
+        ? await this.kernel.chatStream(baseReq, {
+            signal: this.sendAbort.signal,
+            onToken: (token) => {
+              streamBuf += token;
+              this.postChatPatch({
+                streamingReply: streamBuf,
+                thinkingSeconds: this.thinkingSeconds,
+              });
+            },
+          })
+        : await this.kernel.chat(baseReq);
 
       if (!result.ok) {
-        if (result.status >= 500) {
-          this.kernel.invalidateEnsureReady();
+        if (result.code === 'ABORTED' || result.status === 499) {
+          const stopLine: ChatLine = { role: 'system', text: '已停止生成。' };
+          this.lines.push(stopLine);
+          appended.push(stopLine);
+        } else {
+          if (result.status >= 500) {
+            this.kernel.invalidateEnsureReady();
+          }
+          const errLine: ChatLine = {
+            role: 'system',
+            text: `错误${result.code ? ` [${result.code}]` : ''}：${result.message}`,
+          };
+          this.lines.push(errLine);
+          appended.push(errLine);
         }
-        const errLine: ChatLine = {
-          role: 'system',
-          text: `错误${result.code ? ` [${result.code}]` : ''}：${result.message}`,
-        };
-        this.lines.push(errLine);
-        appended.push(errLine);
       } else {
-        if (result.sessionId) {
-          void this.context.globalState.update(SESSION_KEY, result.sessionId);
-        }
-        this.statusBar.syncFromClient(config.apiPort, config.extensionPath);
-        const emotion = result.portraitEmotion || result.botEmotion || 'neutral';
-        this.refreshPortraitForCurrentRole(emotion);
-        const assistantLine: ChatLine = { role: 'assistant', text: result.reply };
-        this.lines.push(assistantLine);
-        appended.push(assistantLine);
-        if (result.replyIsFallback) {
-          const reason = result.llmFallbackReason?.trim();
-          const hint = reason
-            ? `模型未连通（${reason}）。请在设置 → 模型中检查 Ollama / 云端配置。`
-            : '模型未连通，当前为应急回复。请在设置 → 模型中检查配置。';
-          const hintLine: ChatLine = { role: 'system', text: hint, dismissible: true };
-          this.lines.push(hintLine);
-          appended.push(hintLine);
-        }
+        this.applyChatSuccess(result, config, userLineIndex, appended);
       }
     } catch (e) {
-      this.kernel.invalidateEnsureReady();
-      const msg = e instanceof Error ? e.message : String(e);
-      const errLine: ChatLine = { role: 'system', text: `错误：${msg}` };
-      this.lines.push(errLine);
-      appended.push(errLine);
+      if (this.sendAbort.signal.aborted) {
+        const stopLine: ChatLine = { role: 'system', text: '已停止生成。' };
+        this.lines.push(stopLine);
+        appended.push(stopLine);
+      } else {
+        this.kernel.invalidateEnsureReady();
+        const msg = e instanceof Error ? e.message : String(e);
+        const errLine: ChatLine = { role: 'system', text: `错误：${msg}` };
+        this.lines.push(errLine);
+        appended.push(errLine);
+      }
     } finally {
+      this.sendAbort = undefined;
       this.sending = false;
+      this.stopThinkingTimer();
       this.postChatPatch({
         appendLines: appended.length ? appended : undefined,
         sending: false,
+        streamingReply: null,
+        thinkingSeconds: undefined,
         portraitSrc: this.portraitWebviewSrc,
         portraitEmoji: this.portraitEmoji,
         emotion: this.portraitEmotion,

@@ -51,6 +51,67 @@ export interface RoleOption {
   name: string;
 }
 
+export interface MetaActionTemplateEntry {
+  enabled: boolean;
+  attitudeText: string;
+}
+
+export interface MetaActionTemplates {
+  undo: MetaActionTemplateEntry;
+  regenerate: MetaActionTemplateEntry;
+  edit: MetaActionTemplateEntry;
+  delete: MetaActionTemplateEntry;
+}
+
+const DEFAULT_META_TEMPLATES: MetaActionTemplates = {
+  undo: { enabled: true, attitudeText: '（用户撤回了上一轮对话。）' },
+  regenerate: { enabled: true, attitudeText: '（用户希望重新生成上一轮回复。）' },
+  edit: { enabled: true, attitudeText: '（用户修改了先前发送的内容。）' },
+  delete: { enabled: true, attitudeText: '（用户删除了一条聊天记录。）' },
+};
+
+function parseMetaEntry(raw: unknown): MetaActionTemplateEntry {
+  if (!raw || typeof raw !== 'object') {
+    return { enabled: false, attitudeText: '' };
+  }
+  const o = raw as { enabled?: boolean; attitude_text?: string };
+  return {
+    enabled: o.enabled !== false,
+    attitudeText: typeof o.attitude_text === 'string' ? o.attitude_text : '',
+  };
+}
+
+/** Read `config.json` → `meta_action_templates` with built-in defaults. */
+export function readMetaActionTemplates(rolePackDir: string): MetaActionTemplates {
+  const p = path.join(rolePackDir, 'config.json');
+  if (!fs.existsSync(p)) {
+    return { ...DEFAULT_META_TEMPLATES };
+  }
+  try {
+    const root = JSON.parse(fs.readFileSync(p, 'utf8')) as {
+      meta_action_templates?: Record<string, unknown>;
+    };
+    const section = root.meta_action_templates;
+    if (!section || typeof section !== 'object') {
+      return { ...DEFAULT_META_TEMPLATES };
+    }
+    return {
+      undo: section.undo
+        ? parseMetaEntry(section.undo)
+        : { ...DEFAULT_META_TEMPLATES.undo },
+      regenerate: section.regenerate
+        ? parseMetaEntry(section.regenerate)
+        : { ...DEFAULT_META_TEMPLATES.regenerate },
+      edit: section.edit ? parseMetaEntry(section.edit) : { ...DEFAULT_META_TEMPLATES.edit },
+      delete: section.delete
+        ? parseMetaEntry(section.delete)
+        : { ...DEFAULT_META_TEMPLATES.delete },
+    };
+  } catch {
+    return { ...DEFAULT_META_TEMPLATES };
+  }
+}
+
 /** Role folders with display names (allowlist-filtered). */
 export function listRoleOptions(rolesDir: string, allowlist?: string[]): RoleOption[] {
   return listRoleIds(rolesDir, allowlist).map((id) => ({

@@ -1,7 +1,6 @@
 <script lang="ts">
   import Toggle from '../shared/Toggle.svelte';
   import Select from '../shared/Select.svelte';
-  import Collapsible from '../shared/Collapsible.svelte';
   import type { OcliveSettingsKey, SettingsStateSnapshot } from '@protocol';
 
   export let state: SettingsStateSnapshot;
@@ -59,11 +58,6 @@
 />
 <p class="sub">修改端口或 mock 后请重连内核。</p>
 
-<Collapsible title="实验性（未实现）">
-  <p class="future">渗透 · 心声/信件等工作区 Markdown 写入尚未实现，无配置项。</p>
-  <p class="future">idle 聚焦、终端一行展示等见 ROADMAP「渗透」段。</p>
-</Collapsible>
-
 <style>
   .title {
     font-size: 1em;
@@ -88,10 +82,5 @@
   .sub {
     font-size: 0.8em;
     opacity: 0.7;
-  }
-  .future {
-    font-size: 0.85em;
-    opacity: 0.65;
-    margin: 4px 0;
   }
 </style>

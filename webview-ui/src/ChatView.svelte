@@ -21,9 +21,13 @@
   let llmSummary = '';
   let editorChip = '';
   let sending = false;
+  let thinkingSeconds = 0;
+  let streamingReply: string | null = null;
   let inputMinHeight = 52;
   let lines: ChatLine[] = [];
   let inputValue = '';
+  let editingId: string | null = null;
+  let editDraft = '';
 
   let logEl: HTMLDivElement | undefined;
   let splitterDragging = false;
@@ -61,6 +65,8 @@
     if (p.editorChip != null) editorChip = p.editorChip;
     if (p.inputMinHeight != null) inputMinHeight = Number(p.inputMinHeight);
     if (p.sending != null) sending = !!p.sending;
+    if (p.thinkingSeconds != null) thinkingSeconds = Number(p.thinkingSeconds);
+    if (p.streamingReply !== undefined) streamingReply = p.streamingReply;
     mergeLines(p.lines, p.appendLines);
   }
 
@@ -69,10 +75,41 @@
   }
 
   function send(): void {
+    if (sending) {
+      post({ type: 'stopGeneration' });
+      return;
+    }
     const text = inputValue.trim();
-    if (!text || sending) return;
+    if (!text) return;
     post({ type: 'send', text });
     inputValue = '';
+  }
+
+  function canUndo(): boolean {
+    return lines.some((l) => l.role === 'user' || l.role === 'assistant');
+  }
+
+  function startEdit(line: ChatLine): void {
+    if (!line.id || line.role !== 'user' || sending) return;
+    editingId = line.id;
+    editDraft = line.text;
+  }
+
+  function cancelEdit(): void {
+    editingId = null;
+    editDraft = '';
+  }
+
+  function submitEdit(): void {
+    if (!editingId || !editDraft.trim() || sending) return;
+    post({ type: 'editResend', messageId: editingId, newText: editDraft.trim() });
+    editingId = null;
+    editDraft = '';
+  }
+
+  function deleteLine(line: ChatLine): void {
+    if (!line.id || sending) return;
+    post({ type: 'deleteMessage', messageId: line.id });
   }
 
   function onRoleChange(e: Event): void {
@@ -211,22 +248,79 @@
   </div>
 
   <div class="log" bind:this={logEl}>
-    {#each lines as line, i (i)}
-      <div class="msg {line.role}">
-        {line.text}
-        {#if line.dismissible}
-          <button type="button" class="dismiss-hint" on:click={() => post({ type: 'dismissHint' })}>
-            知道了
-          </button>
+    {#each lines as line, i (line.id ?? `line-${i}`)}
+      <div class="msg-wrap {line.role}">
+        {#if editingId === line.id}
+          <div class="edit-box">
+            <textarea bind:value={editDraft} rows="3"></textarea>
+            <div class="edit-actions">
+              <button type="button" class="btn-mini" on:click={submitEdit}>重发</button>
+              <button type="button" class="btn-mini secondary" on:click={cancelEdit}>取消</button>
+            </div>
+          </div>
+        {:else}
+          <div class="msg {line.role}">
+            {line.text}
+            {#if line.dismissible}
+              <button type="button" class="dismiss-hint" on:click={() => post({ type: 'dismissHint' })}>
+                知道了
+              </button>
+            {/if}
+          </div>
+          {#if line.id && (line.role === 'user' || line.role === 'assistant')}
+            <div class="msg-actions">
+              {#if line.role === 'user'}
+                <button
+                  type="button"
+                  class="msg-action"
+                  title="编辑并重发（不回退记忆）"
+                  disabled={sending}
+                  on:click={() => startEdit(line)}
+                >改</button>
+              {/if}
+              <button
+                type="button"
+                class="msg-action"
+                title="删除此条（不回退记忆）"
+                disabled={sending}
+                on:click={() => deleteLine(line)}
+              >删</button>
+            </div>
+          {/if}
         {/if}
       </div>
     {/each}
     {#if sending}
-      <div class="sending">思考中…</div>
+      {#if streamingReply}
+        <div class="msg assistant streaming">{streamingReply}<span class="cursor">▍</span></div>
+      {/if}
+      <div class="sending">
+        <span class="dot-pulse" aria-hidden="true"></span>
+        思考中… {thinkingSeconds}s
+        {#if thinkingSeconds >= 8}
+          <span class="cold-hint">（本地 7B 首次需加载模型，请稍候）</span>
+        {/if}
+      </div>
     {/if}
   </div>
 
   <div class="footer">
+    <div class="turn-actions">
+      <button
+        type="button"
+        class="btn-mini secondary"
+        disabled={sending || !canUndo()}
+        title="撤回最后一轮（不回退记忆）"
+        on:click={() => post({ type: 'undoTurn' })}
+      >撤回上一轮</button>
+      <button
+        type="button"
+        class="btn-mini secondary"
+        disabled={sending || !canUndo()}
+        title="重新生成最后回复"
+        on:click={() => post({ type: 'regenerate' })}
+      >重新生成</button>
+    </div>
     <div class="row">
       <textarea
         bind:value={inputValue}
@@ -240,7 +334,7 @@
           }
         }}
       ></textarea>
-      <button class="send" disabled={sending} on:click={send}>发送</button>
+      <button class="send {sending ? 'stop' : ''}" on:click={send}>{sending ? '停止' : '发送'}</button>
     </div>
   </div>
 </div>
@@ -429,27 +523,73 @@
     overflow-y: auto;
     padding: 8px;
   }
+  .msg-wrap {
+    position: relative;
+    margin-bottom: 6px;
+  }
+  .msg-wrap:hover .msg-actions {
+    opacity: 1;
+  }
   .msg {
     padding: 6px 8px;
-    margin-bottom: 6px;
     border-radius: 4px;
     white-space: pre-wrap;
     word-break: break-word;
     font-size: 0.92em;
   }
-  .user {
+  .msg-wrap.user .msg {
     background: var(--vscode-input-background);
     border: 1px solid var(--vscode-input-border);
   }
-  .assistant {
+  .msg-wrap.assistant .msg,
+  .msg.assistant {
     background: transparent;
     border-left: 2px solid var(--vscode-textLink-foreground, #3794ff);
     padding-left: 10px;
   }
-  .system {
+  .msg-wrap.system .msg {
     opacity: 0.75;
     font-size: 0.85em;
     font-style: italic;
+  }
+  .msg.streaming .cursor {
+    animation: blink 1s step-end infinite;
+  }
+  .msg-actions {
+    display: flex;
+    gap: 4px;
+    padding: 2px 8px 0;
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+  .msg-action {
+    font-size: 0.72em;
+    padding: 1px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--vscode-widget-border, #555);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+  .msg-action:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  .edit-box textarea {
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 4px;
+    padding: 6px;
+    font-family: inherit;
+    font-size: 0.92em;
+  }
+  .edit-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
   }
   .dismiss-hint {
     margin-left: 8px;
@@ -463,12 +603,50 @@
   .sending {
     padding: 4px 8px;
     font-size: 0.85em;
-    opacity: 0.7;
+    opacity: 0.85;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .cold-hint {
+    opacity: 0.8;
+    font-size: 0.92em;
+  }
+  .dot-pulse {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--vscode-textLink-foreground, #3794ff);
+    animation: pulse 1.2s ease-in-out infinite;
   }
   .footer {
     flex-shrink: 0;
     padding: 8px;
     border-top: 1px solid var(--vscode-widget-border, #444);
+  }
+  .turn-actions {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+  .btn-mini {
+    font-size: 0.75em;
+    padding: 3px 8px;
+    border-radius: 3px;
+    border: none;
+    cursor: pointer;
+    background: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
+    color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
+  }
+  .btn-mini.secondary {
+    background: transparent;
+    border: 1px solid var(--vscode-widget-border, #555);
+    color: inherit;
+  }
+  .btn-mini:disabled {
+    opacity: 0.45;
+    cursor: default;
   }
   .row {
     display: flex;
@@ -495,6 +673,10 @@
     border: none;
     border-radius: 3px;
   }
+  .send.stop {
+    background: var(--vscode-inputValidation-errorBackground, #5a1d1d);
+    color: var(--vscode-inputValidation-errorForeground, #fff);
+  }
   .send:disabled {
     opacity: 0.5;
     cursor: default;
@@ -508,5 +690,12 @@
       opacity: 1;
       transform: scale(1);
     }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.35; transform: scale(0.85); }
+    50% { opacity: 1; transform: scale(1); }
+  }
+  @keyframes blink {
+    50% { opacity: 0; }
   }
 </style>
