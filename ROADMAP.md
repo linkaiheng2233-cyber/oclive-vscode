@@ -16,8 +16,8 @@
 - [x] Chat ↔ Settings 应用内路由（无整页 `webview.html` 重置）
 - [x] **聊天体验**：停止生成（AbortSignal）、加载计时/冷启动提示、Ollama 预热、`POST /chat/stream` 逐 token（`oclive.chat.streaming`）
 - [x] **破壁元操作**：撤回/重生成/编辑重发/删单条（`meta_action_templates` + `/chat/storage`）
-- [ ] F5 实机验收（attach + spawn 两路径；2026-06-10 待开发者本机确认）
-- [ ] 首次 `.vsix` 发布（`npm run package` 产物待签名上架）
+- [ ] **V-VSCODE-PERF-05** F5 实机验收（attach + spawn 两路径；2026-06-10 待开发者本机确认）
+- [ ] **V-VSCODE-PERF-05** 首次 `.vsix` 发布（`npm run package` 产物待签名上架）
 
 ## 渗透（未实现 · 默认关闭）
 
