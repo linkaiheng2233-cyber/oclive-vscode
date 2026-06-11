@@ -2,8 +2,12 @@
   "name": "oclive-vscode",
   "displayName": "OCLive",
   "description": "Chat with OCLive role packs from VS Code (kernel_server --api)",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "publisher": "oclive",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/linkaiheng2233-cyber/oclive-vscode.git"
+  },
   "license": "MIT",
   "engines": {
     "vscode": "^1.85.0"
@@ -38,6 +42,30 @@
         "command": "oclive.openSettings",
         "title": "OCLive: Open Settings",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "oclive.appendDiary",
+        "title": "OCLive: Append to Diary"
+      },
+      {
+        "command": "oclive.writeLetter",
+        "title": "OCLive: Write Letter"
+      },
+      {
+        "command": "oclive.revealOcliveFolder",
+        "title": "OCLive: Reveal .oclive Folder"
+      },
+      {
+        "command": "oclive.syncDiaryMemory",
+        "title": "OCLive: Sync Diary Summary to Memory"
+      },
+      {
+        "command": "oclive.listMcpServers",
+        "title": "OCLive: List MCP Servers (Advanced)"
+      },
+      {
+        "command": "oclive.callMcpTool",
+        "title": "OCLive: Call MCP Tool (Agent Profile)"
       }
     ],
     "viewsContainers": {
@@ -139,6 +167,68 @@
           "type": "boolean",
           "default": false,
           "description": "Set OCLIVE_HTTP_API_MOCK_LLM=1 when spawning kernel (dev only)."
+        },
+        "oclive.penetration.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable workspace penetration (diary under .oclive/)."
+        },
+        "oclive.penetration.diaryPath": {
+          "type": "string",
+          "default": ".oclive/{roleId}/diary.md",
+          "description": "Diary path template relative to workspace root; {roleId} is substituted."
+        },
+        "oclive.penetration.autoDiaryEveryNTurns": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Auto-append diary every N chat turns; 0 disables."
+        },
+        "oclive.penetration.allowedGlobs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [".oclive/**"],
+          "description": "Whitelist globs for penetration write paths."
+        },
+        "oclive.penetration.previewAfterWrite": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open diary file in editor after append."
+        },
+        "oclive.penetration.terminal.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show a read-only one-liner in the integrated terminal after diary append."
+        },
+        "oclive.penetration.idle.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "When window loses focus, remind to open chat after idle seconds."
+        },
+        "oclive.penetration.idle.seconds": {
+          "type": "number",
+          "default": 300,
+          "minimum": 60,
+          "description": "Idle seconds before focus reminder."
+        },
+        "oclive.penetration.idle.dailyLimit": {
+          "type": "number",
+          "default": 3,
+          "minimum": 0,
+          "description": "Max idle reminders per day; 0 = unlimited."
+        },
+        "oclive.penetration.memorySync.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow manual sync of today's diary summary into long_term_memory (C2)."
+        },
+        "oclive.penetration.memorySync.importance": {
+          "type": "number",
+          "default": 0.6,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Importance passed to update_memory when syncing diary."
         }
       }
     }

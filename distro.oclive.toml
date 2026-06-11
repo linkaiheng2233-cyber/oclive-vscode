@@ -1,9 +1,14 @@
-# Shipped with the VS Code extension (mirror of oclivenewnew/examples/distro-profiles/vscode.oclive.toml)
-# See oclivenewnew/creator-docs/kernel/DISTRO_CAPABILITY_PROFILE.md
+# OCLive VS Code extension — capability profile (bundled with extension)
+# SSOT mirror: oclivenewnew/examples/distro-profiles/vscode.oclive.toml
+# See creator-docs/kernel/DISTRO_CAPABILITY_PROFILE.md
 
 schema_version = 1
 distro_id = "vscode"
 display_name = "OCLive VS Code"
+
+[interaction]
+default_mode = "pure_chat"
+allow_mode_switch = false
 
 [host_flags]
 skip_agent = true
@@ -14,6 +19,11 @@ complex_emotion = "off"
 
 [prompt]
 profile = "concise"
+
+[state_expression]
+favor_high = "更信任用户的技术判断，少寒暄"
+favor_mid  = "保持友好但不越界"
+favor_low  = "保持距离与礼貌"
 
 [memory]
 retrieval = "light"
@@ -30,3 +40,9 @@ emotion = "builtin"
 event = "builtin"
 prompt = "builtin"
 llm = "ollama"
+
+# VS-3: extension-side defaults; parsed in oclive-vscode (not host_profile yet).
+[penetration]
+enabled = true
+diary_path = ".oclive/{roleId}/diary.md"
+auto_diary_every_n_turns = 0

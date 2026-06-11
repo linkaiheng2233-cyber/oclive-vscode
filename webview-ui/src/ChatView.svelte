@@ -23,6 +23,9 @@
   let sending = false;
   let thinkingSeconds = 0;
   let streamingReply: string | null = null;
+  let sessionOptions: { id: string; label: string }[] = [];
+  let currentSessionId = '';
+  let workspaceHint = '';
   let inputMinHeight = 52;
   let lines: ChatLine[] = [];
   let inputValue = '';
@@ -66,6 +69,9 @@
     if (p.inputMinHeight != null) inputMinHeight = Number(p.inputMinHeight);
     if (p.sending != null) sending = !!p.sending;
     if (p.thinkingSeconds != null) thinkingSeconds = Number(p.thinkingSeconds);
+    if (p.sessionOptions != null) sessionOptions = p.sessionOptions;
+    if (p.currentSessionId != null) currentSessionId = p.currentSessionId;
+    if (p.workspaceHint != null) workspaceHint = p.workspaceHint;
     if (p.streamingReply !== undefined) streamingReply = p.streamingReply;
     mergeLines(p.lines, p.appendLines);
   }
@@ -171,12 +177,43 @@
       logEl.scrollTop = logEl.scrollHeight;
     }
   });
+  function onSessionChange(e: Event): void {
+    const sel = e.currentTarget as HTMLSelectElement;
+    const sessionId = sel.value;
+    if (sessionId && sessionId !== currentSessionId && !sending) {
+      post({ type: 'switchSession', sessionId });
+    }
+  }
 </script>
 
 <div class="chat">
   <div class="action-bar">
     <button type="button" class="btn btn-primary" title="新对话" on:click={() => post({ type: 'newChat' })}>
       <span aria-hidden="true">＋</span> 新对话
+    </button>
+    <select
+      class="session-select"
+      title="历史会话"
+      disabled={sending || sessionOptions.length === 0}
+      value={currentSessionId || sessionOptions[0]?.id || ''}
+      on:change={onSessionChange}
+    >
+      {#if sessionOptions.length === 0}
+        <option value="">当前会话</option>
+      {:else}
+        {#each sessionOptions as opt (opt.id)}
+          <option value={opt.id}>{opt.label}</option>
+        {/each}
+      {/if}
+    </select>
+    <button
+      type="button"
+      class="btn btn-secondary"
+      title="重连内核"
+      disabled={sending}
+      on:click={() => post({ type: 'reconnectKernel' })}
+    >
+      <span aria-hidden="true">↻</span> 重连
     </button>
     <select
       class="role-select"
@@ -193,6 +230,24 @@
         {/each}
       {/if}
     </select>
+    <button
+      type="button"
+      class="btn btn-secondary"
+      title="将最近一轮对话记入工作区日记"
+      disabled={sending}
+      on:click={() => post({ type: 'appendDiary' })}
+    >
+      <span aria-hidden="true">📓</span> 记入日记
+    </button>
+    <button
+      type="button"
+      class="btn btn-secondary"
+      title="写一封信到 .oclive/letters/"
+      disabled={sending}
+      on:click={() => post({ type: 'writeLetter' })}
+    >
+      <span aria-hidden="true">✉</span> 写信
+    </button>
     <button type="button" class="btn btn-secondary" title="设置" on:click={() => post({ type: 'openSettings' })}>
       <span aria-hidden="true">⚙</span> 设置
     </button>
@@ -227,6 +282,9 @@
   ></div>
 
   <div class="meta-row">
+    {#if workspaceHint}
+      <span class="meta-chip static workspace-hint" title="工作区提示">{workspaceHint}</span>
+    {/if}
     {#if identityLabel}
       <button type="button" class="meta-chip" on:click={() => openSettingsSection('identity')}>
         身份 · {identityLabel}
@@ -383,6 +441,28 @@
   .role-select:disabled {
     opacity: 0.6;
     cursor: wait;
+  }
+  .session-select {
+    flex: 1.2;
+    min-width: 0;
+    min-height: 28px;
+    padding: 3px 8px;
+    border-radius: 5px;
+    border: 1px solid var(--vscode-dropdown-border, var(--vscode-widget-border, #3c3c3c));
+    background: var(--vscode-dropdown-background, var(--vscode-input-background, #2a2a2a));
+    color: var(--vscode-dropdown-foreground, var(--vscode-foreground));
+    font-size: 0.78em;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .session-select:disabled {
+    opacity: 0.6;
+    cursor: wait;
+  }
+  .workspace-hint {
+    opacity: 0.85;
+    font-style: italic;
+    white-space: normal;
   }
   .btn {
     flex-shrink: 0;

@@ -17,6 +17,7 @@
   import ModelSection from './sections/ModelSection.svelte';
   import LayoutSection from './sections/LayoutSection.svelte';
   import AdvancedSection from './sections/AdvancedSection.svelte';
+  import PenetrationSection from './sections/PenetrationSection.svelte';
 
   const vscode = getVsCodeApi();
 
@@ -27,6 +28,7 @@
     { id: 'identity', label: '身份' },
     { id: 'model', label: '模型' },
     { id: 'layout', label: '布局' },
+    { id: 'penetration', label: '渗透' },
     { id: 'advanced', label: '高级' },
   ];
 
@@ -138,6 +140,8 @@
             />
           {:else if activeSection === 'layout'}
             <LayoutSection {state} {post} />
+          {:else if activeSection === 'penetration'}
+            <PenetrationSection {state} {post} />
           {:else if activeSection === 'advanced'}
             <AdvancedSection {state} {post} />
           {/if}

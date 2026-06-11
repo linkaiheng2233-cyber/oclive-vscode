@@ -2,7 +2,7 @@
 
 VS Code extension for [OCLive](https://github.com/linkaiheng2233-cyber/oclivenewnew): chat with role packs via **`kernel_server --api`**.
 
-Phase 1 contract: [`../oclivenewnew/creator-docs/role-pack/CROSS_HOST_MEMORY.md`](../oclivenewnew/creator-docs/role-pack/CROSS_HOST_MEMORY.md).
+Phase 1 contract: [CROSS_HOST_MEMORY.md](https://github.com/linkaiheng2233-cyber/oclivenewnew/blob/main/creator-docs/role-pack/CROSS_HOST_MEMORY.md).
 
 ## Zero-config (default)
 
@@ -34,6 +34,9 @@ When a **full** dev/desktop binary is found and `oclive.promoteSharedKernel` is 
 | **OCLive: Select Role** | Pick role folder under `rolesDir` |
 | **OCLive: Select User Identity** | Switch User Identity Prompt Template when `user_identities/` exists |
 | **OCLive: Reconnect Kernel** | Refresh attach/spawn |
+| **OCLive: Append to Diary** | Append last turn to `.oclive/{roleId}/diary.md` |
+| **OCLive: Sync Diary Summary to Memory** | Optional C2: `update_memory` via bridge |
+| **OCLive: List MCP Servers (Advanced)** | VS-4: list + grant MCP (see `docs/VS4_AGENT.md`) |
 
 Roadmap: [ROADMAP.md](./ROADMAP.md).
 

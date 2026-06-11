@@ -28,3 +28,5 @@ jobs:
       - run: npm run lint
       - run: npm run smoke
       - run: npm run test:unit
+      - run: npm run test:capability
+      - run: npm run test:ensure-report

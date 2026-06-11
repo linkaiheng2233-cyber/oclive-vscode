@@ -116,6 +116,17 @@ export class SettingsController {
         'chat.portraitPaneHeight': resolvePortraitPaneHeight(cfg),
         'chat.inputMinHeight': cfg.get('chat.inputMinHeight'),
         'settings.placement': cfg.get('settings.placement'),
+        'penetration.enabled': cfg.get('penetration.enabled'),
+        'penetration.diaryPath': cfg.get('penetration.diaryPath'),
+        'penetration.autoDiaryEveryNTurns': cfg.get('penetration.autoDiaryEveryNTurns'),
+        'penetration.allowedGlobs': cfg.get('penetration.allowedGlobs'),
+        'penetration.previewAfterWrite': cfg.get('penetration.previewAfterWrite'),
+        'penetration.terminal.enabled': cfg.get('penetration.terminal.enabled'),
+        'penetration.idle.enabled': cfg.get('penetration.idle.enabled'),
+        'penetration.idle.seconds': cfg.get('penetration.idle.seconds'),
+        'penetration.idle.dailyLimit': cfg.get('penetration.idle.dailyLimit'),
+        'penetration.memorySync.enabled': cfg.get('penetration.memorySync.enabled'),
+        'penetration.memorySync.importance': cfg.get('penetration.memorySync.importance'),
       },
       kernelMode: this.kernel.connectionMode,
       roleInfo,
@@ -176,6 +187,15 @@ export class SettingsController {
       case 'navigateSection':
         this.initialSection = msg.section;
         break;
+      case 'syncDiaryMemory': {
+        const result = await this.getChatProvider()?.getPenetrationService().syncTodayDiaryToMemory();
+        this.postMessage({
+          type: 'toast',
+          level: result?.ok ? 'info' : 'error',
+          message: result?.message ?? '操作失败',
+        });
+        break;
+      }
     }
   }
 

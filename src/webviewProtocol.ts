@@ -18,6 +18,11 @@ export interface RoleOptionSnapshot {
   name: string;
 }
 
+export interface SessionOptionSnapshot {
+  id: string;
+  label: string;
+}
+
 export interface ChatPatchPayload {
   roleName?: string;
   roleOptions?: RoleOptionSnapshot[];
@@ -41,6 +46,11 @@ export interface ChatPatchPayload {
   streamingReply?: string | null;
   /** Elapsed seconds while waiting for LLM (loading animation). */
   thinkingSeconds?: number;
+  /** Chat session picker (listChatSessions). */
+  sessionOptions?: SessionOptionSnapshot[];
+  currentSessionId?: string;
+  /** Non-blocking hint when no workspace folder (penetration). */
+  workspaceHint?: string;
 }
 
 /** Settings keys writable from the settings webview. */
@@ -56,7 +66,18 @@ export type OcliveSettingsKey =
   | 'mockLlm'
   | 'chat.portraitPaneHeight'
   | 'chat.inputMinHeight'
-  | 'settings.placement';
+  | 'settings.placement'
+  | 'penetration.enabled'
+  | 'penetration.diaryPath'
+  | 'penetration.autoDiaryEveryNTurns'
+  | 'penetration.allowedGlobs'
+  | 'penetration.previewAfterWrite'
+  | 'penetration.terminal.enabled'
+  | 'penetration.idle.enabled'
+  | 'penetration.idle.seconds'
+  | 'penetration.idle.dailyLimit'
+  | 'penetration.memorySync.enabled'
+  | 'penetration.memorySync.importance';
 
 export type SettingsSection =
   | 'role'
@@ -65,6 +86,7 @@ export type SettingsSection =
   | 'editor'
   | 'model'
   | 'layout'
+  | 'penetration'
   | 'advanced';
 
 export interface SettingsDiscoverySnapshot {
@@ -102,13 +124,17 @@ export type WebviewToHostMessage =
   | { type: 'regenerate' }
   | { type: 'editResend'; messageId: string; newText: string }
   | { type: 'deleteMessage'; messageId: string }
+  | { type: 'appendDiary' }
+  | { type: 'writeLetter' }
+  | { type: 'reconnectKernel' }
+  | { type: 'switchSession'; sessionId: string }
+  | { type: 'syncDiaryMemory' }
   | { type: 'newChat' }
   | { type: 'selectRole'; roleId: string }
   | { type: 'resizePortraitPane'; height: number }
   | { type: 'dismissHint' }
   | { type: 'updateConfig'; key: OcliveSettingsKey; value: unknown }
   | { type: 'setIdentity'; identityId: string }
-  | { type: 'reconnectKernel' }
   | { type: 'rediscover' }
   | {
       type: 'saveLlmSettings';

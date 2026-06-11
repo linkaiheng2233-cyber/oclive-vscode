@@ -29,6 +29,11 @@ import {
   clampPortraitPaneHeight,
   resolvePortraitPaneHeight,
 } from './chatLayoutConfig';
+import { formatKernelErrorForUser } from './kernelError';
+import { PenetrationService } from './penetration/penetrationService';
+import { PERF_MARK, logPerfMeasure, perfMark } from './performanceMarks';
+import type { SessionMeta } from './kernelClient';
+import type { SessionOptionSnapshot } from './webviewProtocol';
 
 const SCENE_ID = 'vscode';
 const SESSION_KEY = 'oclive.sessionId';
@@ -36,6 +41,12 @@ const ATTACH_HINT_KEY = 'oclive.attachHintShown';
 const POLL_INTERVAL_VISIBLE_MS = 15000;
 const POLL_INTERVAL_HIDDEN_MS = 60000;
 const EDITOR_DEBOUNCE_MS = 280;
+
+export interface AppendDiaryOutcome {
+  ok: boolean;
+  message: string;
+  filePath?: string;
+}
 
 function storedMessageToLine(msg: StoredMessage): ChatLine {
   const sender = msg.sender.toLowerCase();
@@ -79,6 +90,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private sendAbort?: AbortController;
   private thinkingTimer?: ReturnType<typeof setInterval>;
   private thinkingSeconds = 0;
+  private sessionOptionsCache: SessionOptionSnapshot[] = [];
+  private workspaceHint = '';
+  private readonly penetration: PenetrationService;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -86,7 +100,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     private readonly context: vscode.ExtensionContext,
     private readonly statusBar: KernelStatusBar,
     private readonly settingsController: SettingsController,
-  ) {}
+  ) {
+    this.penetration = new PenetrationService(context, kernel);
+  }
+
+  getPenetrationService(): PenetrationService {
+    return this.penetration;
+  }
 
   resolveWebviewView(
     webviewView: vscode.WebviewView,
@@ -172,6 +192,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           ...this.lines.filter((l) => !l.dismissible),
         );
         this.postChatPatch({ lines: [...this.lines] });
+        break;
+      case 'appendDiary':
+        await this.handleAppendDiary();
+        break;
+      case 'writeLetter':
+        await this.handleWriteLetter();
+        break;
+      case 'reconnectKernel':
+        await this.handleReconnectKernel();
+        break;
+      case 'switchSession':
+        await this.switchChatSession(msg.sessionId);
         break;
       case 'closeSettings':
         await this.closeSettings();
@@ -570,7 +602,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async bootstrap(): Promise<void> {
+    perfMark(PERF_MARK.bootstrapStart);
     const config = getEffectiveConfig();
+    this.workspaceHint = vscode.workspace.workspaceFolders?.length
+      ? ''
+      : '未打开工作区文件夹：纯聊天可用；渗透（日记/信件）需打开文件夹。';
     if (config.rolesDir) {
       const pack = rolePackPath(config);
       this.roleName = readRoleDisplayName(pack);
@@ -589,8 +625,104 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
     await this.refreshIdentityLabel();
     this.updateEditorChip();
+    await this.refreshSessionOptions();
     if (this.shellReady) {
       this.postChatPatch(this.buildFullPatch());
+    }
+    perfMark(PERF_MARK.bootstrapReady);
+    logPerfMeasure('bootstrap', PERF_MARK.bootstrapStart, PERF_MARK.bootstrapReady);
+  }
+
+  private formatSessionLabel(session: SessionMeta): string {
+    const snippet = session.last_message_snippet?.trim();
+    const when = session.updated_at?.slice(0, 16).replace('T', ' ') ?? '';
+    const count = session.message_count ?? 0;
+    if (snippet) {
+      return `${when} · ${count} 条 · ${snippet.slice(0, 36)}`;
+    }
+    return `${when} · ${count} 条 · ${session.session_id.slice(0, 8)}`;
+  }
+
+  private async refreshSessionOptions(): Promise<void> {
+    const config = getEffectiveConfig();
+    if (!config.rolesDir) {
+      this.sessionOptionsCache = [];
+      return;
+    }
+    try {
+      await this.kernel.ensureReady(config);
+      const roleId = path.basename(rolePackPath(config));
+      const sessions = await this.kernel.listChatSessions(roleId, SCENE_ID, config);
+      this.sessionOptionsCache = sessions.map((s) => ({
+        id: s.session_id,
+        label: this.formatSessionLabel(s),
+      }));
+    } catch {
+      this.sessionOptionsCache = [];
+    }
+  }
+
+  private async switchChatSession(sessionId: string): Promise<void> {
+    if (!sessionId || this.sending) {
+      return;
+    }
+    void this.context.globalState.update(SESSION_KEY, sessionId);
+    this.lines.length = 0;
+    this.welcomed = false;
+    await this.loadChatHistory();
+    this.postChatPatch({
+      lines: [...this.lines],
+      currentSessionId: sessionId,
+      sessionOptions: this.sessionOptionsCache,
+    });
+  }
+
+  async handleReconnectKernel(): Promise<void> {
+    const config = getEffectiveConfig();
+    try {
+      this.kernel.invalidateEnsureReady();
+      perfMark(PERF_MARK.ensureReadyStart);
+      const mode = await this.kernel.ensureReady(config, { force: true });
+      perfMark(PERF_MARK.ensureReadyDone);
+      logPerfMeasure('reconnect', PERF_MARK.ensureReadyStart, PERF_MARK.ensureReadyDone);
+      this.statusBar.syncFromClient(config.apiPort, config.extensionPath);
+      this.updateConnectionSummary(mode);
+      await this.refreshLlmContext();
+      await this.refreshSessionOptions();
+      this.postChatPatch({
+        connectionSummary: this.connectionSummary,
+        llmSummary: this.llmSummary,
+        sessionOptions: this.sessionOptionsCache,
+      });
+      void vscode.window.showInformationMessage(
+        `已重连 · ${mode} (:${config.apiPort})`,
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      void vscode.window.showErrorMessage(formatKernelErrorForUser({ message: msg }));
+    }
+  }
+
+  async handleWriteLetter(): Promise<void> {
+    const turn = this.lastTurnForDiary();
+    const draft = turn
+      ? `## 对话摘录\n\n**你**：${turn.userText}\n\n**${this.roleName || '角色'}**：${turn.assistantText}\n`
+      : '';
+    const body =
+      (await vscode.window.showInputBox({
+        title: '写一封信',
+        prompt: '正文（可编辑草稿）',
+        value: draft,
+        ignoreFocusOut: true,
+      })) ?? '';
+    if (!body.trim()) {
+      return;
+    }
+    const result = await this.penetration.writeLetterFromDraft(body, this.roleName);
+    if (result.ok) {
+      void vscode.window.showInformationMessage(result.message);
+    } else if (result.message !== '已取消写入') {
+      void vscode.window.showWarningMessage(result.message);
     }
   }
 
@@ -981,6 +1113,46 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     await this.injectAttitudeAndSend(this.attitudeText('delete'));
   }
 
+  private lastTurnForDiary(): { userText: string; assistantText: string } | null {
+    let assistantText = '';
+    let userText = '';
+    for (let i = this.lines.length - 1; i >= 0; i--) {
+      const line = this.lines[i];
+      if (!assistantText && line.role === 'assistant') {
+        assistantText = line.text;
+        continue;
+      }
+      if (assistantText && line.role === 'user') {
+        userText = line.text;
+        break;
+      }
+    }
+    if (!userText || !assistantText) {
+      return null;
+    }
+    return { userText, assistantText };
+  }
+
+  async handleAppendDiary(): Promise<AppendDiaryOutcome> {
+    const turn = this.lastTurnForDiary();
+    if (!turn) {
+      const message = '尚无完整的一轮对话可记入日记';
+      void vscode.window.showWarningMessage(message);
+      return { ok: false, message };
+    }
+    const result = await this.penetration.appendDiaryFromLastTurn(
+      turn.userText,
+      turn.assistantText,
+      this.roleName,
+    );
+    if (result.ok) {
+      void vscode.window.showInformationMessage(result.message);
+    } else {
+      void vscode.window.showWarningMessage(result.message);
+    }
+    return result;
+  }
+
   private applyChatSuccess(
     result: {
       reply: string;
@@ -995,6 +1167,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     config: ReturnType<typeof getEffectiveConfig>,
     userLineIndex: number,
     appended: ChatLine[],
+    visibleUserText: string,
   ): void {
     if (result.sessionId) {
       void this.context.globalState.update(SESSION_KEY, result.sessionId);
@@ -1022,6 +1195,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       this.lines.push(hintLine);
       appended.push(hintLine);
     }
+
+    void this.penetration.maybeAutoDiaryAfterTurn(
+      visibleUserText,
+      result.reply,
+      this.roleName,
+    );
   }
 
   private async handleSend(
@@ -1056,6 +1235,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     this.sendAbort = new AbortController();
     this.sending = true;
     this.startThinkingTimer();
+    perfMark(PERF_MARK.sendStart);
+    let firstTokenMarked = false;
     this.postChatPatch({
       appendLines: [this.lines[userLineIndex]],
       sending: true,
@@ -1080,6 +1261,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         ? await this.kernel.chatStream(baseReq, {
             signal: this.sendAbort.signal,
             onToken: (token) => {
+              if (!firstTokenMarked) {
+                firstTokenMarked = true;
+                perfMark(PERF_MARK.firstToken);
+                logPerfMeasure('sendToFirstToken', PERF_MARK.sendStart, PERF_MARK.firstToken);
+              }
               streamBuf += token;
               this.postChatPatch({
                 streamingReply: streamBuf,
@@ -1100,13 +1286,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           }
           const errLine: ChatLine = {
             role: 'system',
-            text: `错误${result.code ? ` [${result.code}]` : ''}：${result.message}`,
+            text: formatKernelErrorForUser({ code: result.code, message: result.message }),
           };
           this.lines.push(errLine);
           appended.push(errLine);
         }
       } else {
-        this.applyChatSuccess(result, config, userLineIndex, appended);
+        if (!firstTokenMarked) {
+          perfMark(PERF_MARK.firstToken);
+          logPerfMeasure('sendToFirstToken', PERF_MARK.sendStart, PERF_MARK.firstToken);
+        }
+        this.applyChatSuccess(result, config, userLineIndex, appended, visibleText);
+        void this.refreshSessionOptions().then(() => {
+          this.postChatPatch({ sessionOptions: this.sessionOptionsCache });
+        });
       }
     } catch (e) {
       if (this.sendAbort.signal.aborted) {
@@ -1116,11 +1309,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       } else {
         this.kernel.invalidateEnsureReady();
         const msg = e instanceof Error ? e.message : String(e);
-        const errLine: ChatLine = { role: 'system', text: `错误：${msg}` };
+        const errLine: ChatLine = {
+          role: 'system',
+          text: formatKernelErrorForUser({ message: msg, code: 'KERNEL_OFFLINE' }),
+        };
         this.lines.push(errLine);
         appended.push(errLine);
       }
     } finally {
+      perfMark(PERF_MARK.sendDone);
+      logPerfMeasure('sendRoundTrip', PERF_MARK.sendStart, PERF_MARK.sendDone);
       this.sendAbort = undefined;
       this.sending = false;
       this.stopThinkingTimer();
@@ -1154,6 +1352,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       sending: this.sending,
       inputMinHeight: layout.inputMinHeight,
       lines: [...this.lines],
+      sessionOptions: this.sessionOptionsCache,
+      currentSessionId: this.sessionId(),
+      workspaceHint: this.workspaceHint || undefined,
     };
   }
 

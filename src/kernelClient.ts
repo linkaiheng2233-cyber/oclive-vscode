@@ -1169,6 +1169,36 @@ export class KernelClient {
     }
   }
 
+  /** Thin wrapper for `POST /bridge/dispatch` (e.g. `update_memory` for diary sync). */
+  async bridgeDispatch(
+    command: string,
+    params: Record<string, unknown>,
+    config: OcliveConfig = cfg(),
+  ): Promise<KernelResult<Record<string, unknown>>> {
+    await this.ensureReady(config);
+    try {
+      const res = await fetch(`${apiBase(config)}/bridge/dispatch`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ command, params }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) {
+        const err = await parseKernelErrorResponse(res);
+        if (res.status >= 500) {
+          this.invalidateEnsureReady();
+        }
+        return { ok: false, error: err };
+      }
+      const data = (await res.json()) as Record<string, unknown>;
+      return { ok: true, data };
+    } catch (e) {
+      this.invalidateEnsureReady();
+      const msg = e instanceof Error ? e.message : String(e);
+      return { ok: false, error: { code: 'KERNEL_OFFLINE', message: msg } };
+    }
+  }
+
   dispose(): void {
     if (this.spawned) {
       this.spawned.kill();
