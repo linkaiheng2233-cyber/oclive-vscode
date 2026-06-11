@@ -1,10 +1,10 @@
-# OCLive VS Code extension — capability profile (bundled with extension)
+# OCLive VS Code Flash — Pro 简洁版（explicit six-slot matrix）
 # SSOT mirror: oclivenewnew/examples/distro-profiles/vscode.oclive.toml
-# See creator-docs/kernel/DISTRO_CAPABILITY_PROFILE.md
+# See creator-docs/kernel/DISTRO_DEFAULT_PLUGINS.md §3.2
 
 schema_version = 1
 distro_id = "vscode"
-display_name = "OCLive VS Code"
+display_name = "OCLive VS Code Flash"
 
 [interaction]
 default_mode = "pure_chat"
@@ -40,4 +40,3 @@ emotion = "builtin"
 event = "builtin"
 prompt = "builtin"
 llm = "ollama"
-

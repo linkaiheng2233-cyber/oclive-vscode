@@ -311,6 +311,40 @@ export function pickBestKernel(candidates: KernelCandidate[]): KernelCandidate |
   return candidates[0];
 }
 
+/** K-SCHED-05: bundled → shared → dev (OCLIVE_DEVELOPER=1). Mirrors Rust `pick_best_for_spawn`. */
+export function developerSpawnEnabled(): boolean {
+  const v = (process.env.OCLIVE_DEVELOPER ?? '').trim().toLowerCase();
+  return v === '1' || v === 'true';
+}
+
+function spawnTierRank(tier: KernelTier): number {
+  switch (tier) {
+    case 'env':
+      return 0;
+    case 'bundled':
+      return 1;
+    case 'shared':
+      return 2;
+    case 'settings':
+      return 3;
+    default:
+      return 4;
+  }
+}
+
+export function pickBestForSpawn(candidates: KernelCandidate[]): KernelCandidate | undefined {
+  const devOk = developerSpawnEnabled();
+  const eligible = candidates.filter((c) => {
+    if (c.tier === 'dev-full' || c.tier === 'dev-headless') {
+      return devOk;
+    }
+    return true;
+  });
+  return eligible.sort(
+    (a, b) => spawnTierRank(a.tier) - spawnTierRank(b.tier) || b.score - a.score,
+  )[0];
+}
+
 /** Copy best dev/shared-quality binary into shared runtime dir (backup + manifest sidecar, P3a). */
 export function promoteToSharedRuntime(binary: string): string | undefined {
   try {
@@ -352,7 +386,7 @@ export function resolveEnvironment(opts: {
   }
 
   const candidates = discoverSpawnKernelCandidates(opts.extensionPath, opts.settingsKernelBinary);
-  const best = pickBestKernel(candidates);
+  const best = pickBestForSpawn(candidates) ?? pickBestKernel(candidates);
 
   let kernelBinary = '';
   let kernelTier: KernelTier = 'bundled';

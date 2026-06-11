@@ -177,6 +177,7 @@
     "test:unit": "tsc -p ./ && node scripts/test-unit.mjs",
     "test:capability": "node scripts/test-kernel-capability.mjs",
     "test:ensure-report": "node scripts/test-ensure-report.mjs",
+    "test:distro-profile-mirror": "node ../oclivenewnew/scripts/diff-vscode-distro-profile.mjs",
     "smoke": "node scripts/smoke.mjs",
     "smoke:attach": "node scripts/smoke-attach.mjs"
   },
