@@ -14,9 +14,17 @@
 
 本地联调：`"@oclive/vscode-host": "file:../oclive-vscode-host"` + multi-root workspace。
 
----
+**npm 安装**（host 已发布至 [npmjs.org](https://www.npmjs.com/package/@oclive/vscode-host)）：
 
-## 写盘与白名单
+```bash
+npm install @oclive/vscode-host@^0.1.0
+```
+
+| npm `@oclive/vscode-host` | 核心扩展 | 官方渗透 |
+|---------------------------|----------|----------|
+| `^0.1.0` | `oclive-vscode` ^0.4.0 | `oclive-vscode-penetration` ^0.1.0 |
+
+GitHub 源码：[oclive-vscode-host](https://github.com/linkaiheng2233-cyber/oclive-vscode-host) · [oclive-vscode](https://github.com/linkaiheng2233-cyber/oclive-vscode) · [oclive-vscode-penetration](https://github.com/linkaiheng2233-cyber/oclive-vscode-penetration)
 
 **不要**直接 `fs.writeFile` 到工作区。使用：
 

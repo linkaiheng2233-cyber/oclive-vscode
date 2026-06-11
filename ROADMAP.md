@@ -10,8 +10,8 @@
 | 阶段 | 北极星 | 状态 |
 |------|--------|------|
 | **VS-1** 聊天底座 | 与基础聊天发行版同级的流畅易用 | **Done**（0.3.2） |
-| **VS-2P** 渗透插件化 | 日记+信+idle 等 **独立插件**；核心宿主 API | **Next**（0.4.0） |
-| **VS-3P** 渗透生态 | 第三方样例 · 核心默认无内置渗透 | **Planned**（0.4–0.5） |
+| **VS-2P** 渗透插件化 | 日记+信+idle 等 **独立插件**；核心宿主 API | **Done**（0.4.0） |
+| **VS-3P** 渗透生态 | 第三方样例 · 核心默认无内置渗透 | **In progress**（0.4–0.5） |
 | **VS-4** 可选 Agent | MCP HTTP + QuickPick（高级 profile） | **Done**（0.3.2 · 默认无入口） |
 | **0.4 波次 5** | pack-editor 情绪图 · vscode-lite 导出 | **Deferred** |
 
@@ -35,11 +35,11 @@
 | 项 | 说明 | 状态 |
 |----|------|------|
 | 战略文档 | `PENETRATION_PLUGIN_MODEL.md` · 决策门 D | **Done** |
-| 宿主 API | `onChatTurnCompleted` · `requestWorkspaceWrite` · 历史/角色包读取 | **Planned** |
-| 官方插件仓 | `oclive-vscode-penetration`（extensionDependencies） | **Planned** |
-| 功能 parity | 从 `src/penetration/*` 迁出：日记 · 信 · idle · 终端 · C2 | **Planned** |
-| 核心 deprecated | 内置渗透标记过渡；设置页引导安装插件 | **Planned** |
-| 核心默认 | `oclive.penetration.enabled` → **false**（0.4.x） | **Planned** |
+| 宿主 API | `onChatTurnCompleted` · `requestWorkspaceWrite` · 历史/角色包读取 | **Done** |
+| 官方插件仓 | `oclive-vscode-penetration`（extensionDependencies） | **Done** |
+| 功能 parity | 从 `src/penetration/*` 迁出：日记 · 信 · idle · 终端 · C2 | **Done** |
+| 核心 deprecated | 内置渗透标记过渡；设置页引导安装插件 | **Done** |
+| 核心默认 | 无内置渗透命令（0.4.0 Breaking） | **Done** |
 | 核心移除 | 删除内置 `penetration/`（0.5.0） | **Planned** |
 
 **原则**：日记与写信 **同一插件包**；核心 **不** 再扩展新的内置渗透功能。
@@ -59,9 +59,9 @@
 
 ## VS-3P · 渗透生态（0.4–0.5）
 
-- [ ] 第三方「最小渗透插件」样例（仅写自定义 md）
+- [x] 第三方「最小渗透插件」样例（`oclive-vscode-host/examples/minimal-penetration`）
 - [ ] 插件市场 / Open VSX 分列「核心」与「官方渗透」
-- [ ] 创作者文档：自写渗透 vs 用官方插件
+- [x] 创作者文档：自写渗透 vs 用官方插件（`PENETRATION_PLUGIN_AUTHOR.md`）
 - [ ] `distro.oclive.toml` `[penetration]` 迁至插件 profile
 
 ---

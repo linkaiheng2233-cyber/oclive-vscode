@@ -104,10 +104,19 @@ npm run test:capability
 
 ## 签核
 
+**自动化验收**（2026-06-11 · 本地 dev 机）：
+
+- [x] 路径 B spawn — `npm run smoke` 退出码 0
+- [x] `test:unit` + `test:ensure-report` + `test:capability` — 全绿
+- [x] 清单 A C4 — 核心 `test:unit` 绿
+- [x] 清单 B P7 — 渗透 `test:unit` 绿
+- [x] VSIX V1 — `npm run package` 可本地执行（见 Release tag）
+
+**人工 F5 / VSIX 安装**（需 IDE 实机）：
+
 - [ ] 路径 A attach
-- [ ] 路径 B spawn
-- [ ] VSIX 安装
-- [ ] `test:unit` + `test:ensure-report` + `test:capability`
-- [ ] 清单 A 仅核心 C1–C4
-- [ ] 清单 B 核心+渗透 P1–P7
+- [ ] 路径 B spawn（F5 UI）
+- [ ] VSIX 安装 V2–V3
+- [ ] 清单 A C1–C3
+- [ ] 清单 B P1–P6
 - [ ] MCP（可选，agent profile）

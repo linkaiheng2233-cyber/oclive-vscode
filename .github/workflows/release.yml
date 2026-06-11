@@ -29,9 +29,11 @@ jobs:
           node-version: '20'
           cache: npm
           cache-dependency-path: oclive-vscode/package-lock.json
-      - name: Build @oclive/vscode-host
-        run: cd ../oclive-vscode-host && npm ci && npm run build
-      - run: npm ci
+      - name: Build and pack @oclive/vscode-host
+        run: |
+          cd ../oclive-vscode-host && npm ci && npm run build && npm pack
+      - name: Install host API tarball (avoids file: symlink in VSIX)
+        run: npm install ../oclive-vscode-host/oclive-vscode-host-0.1.0.tgz
       - run: npm run package
       - name: Upload VSIX to GitHub Release
         uses: softprops/action-gh-release@v2
