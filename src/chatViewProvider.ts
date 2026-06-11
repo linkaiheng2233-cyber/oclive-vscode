@@ -30,7 +30,7 @@ import {
   resolvePortraitPaneHeight,
 } from './chatLayoutConfig';
 import { formatKernelErrorForUser } from './kernelError';
-import { PenetrationService } from './penetration/penetrationService';
+import type { OcliveHostApiImpl } from './hostApi/OcliveHostApiImpl';
 import { PERF_MARK, logPerfMeasure, perfMark } from './performanceMarks';
 import type { SessionMeta } from './kernelClient';
 import type { SessionOptionSnapshot } from './webviewProtocol';
@@ -41,12 +41,6 @@ const ATTACH_HINT_KEY = 'oclive.attachHintShown';
 const POLL_INTERVAL_VISIBLE_MS = 15000;
 const POLL_INTERVAL_HIDDEN_MS = 60000;
 const EDITOR_DEBOUNCE_MS = 280;
-
-export interface AppendDiaryOutcome {
-  ok: boolean;
-  message: string;
-  filePath?: string;
-}
 
 function storedMessageToLine(msg: StoredMessage): ChatLine {
   const sender = msg.sender.toLowerCase();
@@ -92,7 +86,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private thinkingSeconds = 0;
   private sessionOptionsCache: SessionOptionSnapshot[] = [];
   private workspaceHint = '';
-  private readonly penetration: PenetrationService;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -100,12 +93,36 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     private readonly context: vscode.ExtensionContext,
     private readonly statusBar: KernelStatusBar,
     private readonly settingsController: SettingsController,
+    private readonly hostApi: OcliveHostApiImpl,
   ) {
-    this.penetration = new PenetrationService(context, kernel);
+    this.hostApi.onToolbarChanged(() => {
+      this.postChatPatch({ toolbarActions: this.hostApi.getToolbarActionSnapshots() });
+    });
   }
 
-  getPenetrationService(): PenetrationService {
-    return this.penetration;
+  bindHostApiDeps(): void {
+    this.hostApi.setDeps({
+      getEditorContext: () => this.buildEditorContextSnapshot(),
+      getRecentTurn: () => this.lastTurnForDiary() ?? undefined,
+      getSessionId: () => this.sessionId(),
+      getRoleName: () => this.roleName,
+    });
+  }
+
+  private buildEditorContextSnapshot() {
+    const config = getEffectiveConfig();
+    if (!config.includeEditorContext) {
+      return { hasSelection: false, chipLabel: '' };
+    }
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) {
+      return { hasSelection: false, chipLabel: '' };
+    }
+    const rel = vscode.workspace.asRelativePath(editor.document.uri);
+    const lang = editor.document.languageId;
+    const hasSelection = !editor.selection.isEmpty;
+    const chipLabel = hasSelection ? `${rel} · ${lang} · 选区` : `${rel} · ${lang}`;
+    return { relativePath: rel, languageId: lang, hasSelection, chipLabel };
   }
 
   resolveWebviewView(
@@ -193,11 +210,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         );
         this.postChatPatch({ lines: [...this.lines] });
         break;
-      case 'appendDiary':
-        await this.handleAppendDiary();
-        break;
-      case 'writeLetter':
-        await this.handleWriteLetter();
+      case 'toolbarAction':
+        await vscode.commands.executeCommand(msg.command);
         break;
       case 'reconnectKernel':
         await this.handleReconnectKernel();
@@ -606,7 +620,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     const config = getEffectiveConfig();
     this.workspaceHint = vscode.workspace.workspaceFolders?.length
       ? ''
-      : '未打开工作区文件夹：纯聊天可用；渗透（日记/信件）需打开文件夹。';
+      : '未打开工作区文件夹：纯聊天可用；渗透插件写盘需打开文件夹。';
     if (config.rolesDir) {
       const pack = rolePackPath(config);
       this.roleName = readRoleDisplayName(pack);
@@ -700,29 +714,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       void vscode.window.showErrorMessage(formatKernelErrorForUser({ message: msg }));
-    }
-  }
-
-  async handleWriteLetter(): Promise<void> {
-    const turn = this.lastTurnForDiary();
-    const draft = turn
-      ? `## 对话摘录\n\n**你**：${turn.userText}\n\n**${this.roleName || '角色'}**：${turn.assistantText}\n`
-      : '';
-    const body =
-      (await vscode.window.showInputBox({
-        title: '写一封信',
-        prompt: '正文（可编辑草稿）',
-        value: draft,
-        ignoreFocusOut: true,
-      })) ?? '';
-    if (!body.trim()) {
-      return;
-    }
-    const result = await this.penetration.writeLetterFromDraft(body, this.roleName);
-    if (result.ok) {
-      void vscode.window.showInformationMessage(result.message);
-    } else if (result.message !== '已取消写入') {
-      void vscode.window.showWarningMessage(result.message);
     }
   }
 
@@ -1133,26 +1124,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     return { userText, assistantText };
   }
 
-  async handleAppendDiary(): Promise<AppendDiaryOutcome> {
-    const turn = this.lastTurnForDiary();
-    if (!turn) {
-      const message = '尚无完整的一轮对话可记入日记';
-      void vscode.window.showWarningMessage(message);
-      return { ok: false, message };
-    }
-    const result = await this.penetration.appendDiaryFromLastTurn(
-      turn.userText,
-      turn.assistantText,
-      this.roleName,
-    );
-    if (result.ok) {
-      void vscode.window.showInformationMessage(result.message);
-    } else {
-      void vscode.window.showWarningMessage(result.message);
-    }
-    return result;
-  }
-
   private applyChatSuccess(
     result: {
       reply: string;
@@ -1196,11 +1167,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       appended.push(hintLine);
     }
 
-    void this.penetration.maybeAutoDiaryAfterTurn(
-      visibleUserText,
-      result.reply,
-      this.roleName,
-    );
+    const roleId = config.rolesDir ? path.basename(rolePackPath(config)) : config.roleId;
+    this.hostApi.fireChatTurnCompleted({
+      roleId,
+      sessionId: result.sessionId ?? this.sessionId(),
+      userText: visibleUserText,
+      reply: result.reply,
+      roleName: this.roleName,
+    });
   }
 
   private async handleSend(
@@ -1355,6 +1329,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       sessionOptions: this.sessionOptionsCache,
       currentSessionId: this.sessionId(),
       workspaceHint: this.workspaceHint || undefined,
+      toolbarActions: this.hostApi.getToolbarActionSnapshots(),
     };
   }
 

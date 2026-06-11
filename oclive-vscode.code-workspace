@@ -1,0 +1,13 @@
+{
+  "folders": [
+    { "path": ".", "name": "oclive-vscode (core)" },
+    { "path": "../oclive-vscode-host", "name": "oclive-vscode-host (npm)" },
+    { "path": "../oclive-vscode-penetration", "name": "oclive-vscode-penetration" }
+  ],
+  "settings": {
+    "typescript.tsdk": "node_modules/typescript/lib"
+  },
+  "extensions": {
+    "recommendations": []
+  }
+}

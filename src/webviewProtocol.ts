@@ -1,3 +1,6 @@
+import type { ChatToolbarActionSnapshot } from '@oclive/vscode-host';
+
+export type { ChatToolbarActionSnapshot } from '@oclive/vscode-host';
 import type { KernelHealthJson, KernelMode } from './kernelClient';
 import type { LlmUserSettings } from './types/llmSettings';
 import type { RoleInfo } from './types/roleInfo';
@@ -49,8 +52,10 @@ export interface ChatPatchPayload {
   /** Chat session picker (listChatSessions). */
   sessionOptions?: SessionOptionSnapshot[];
   currentSessionId?: string;
-  /** Non-blocking hint when no workspace folder (penetration). */
+  /** Non-blocking hint when no workspace folder. */
   workspaceHint?: string;
+  /** Dynamic toolbar actions registered by penetration plugins. */
+  toolbarActions?: ChatToolbarActionSnapshot[];
 }
 
 /** Settings keys writable from the settings webview. */
@@ -67,17 +72,6 @@ export type OcliveSettingsKey =
   | 'chat.portraitPaneHeight'
   | 'chat.inputMinHeight'
   | 'settings.placement'
-  | 'penetration.enabled'
-  | 'penetration.diaryPath'
-  | 'penetration.autoDiaryEveryNTurns'
-  | 'penetration.allowedGlobs'
-  | 'penetration.previewAfterWrite'
-  | 'penetration.terminal.enabled'
-  | 'penetration.idle.enabled'
-  | 'penetration.idle.seconds'
-  | 'penetration.idle.dailyLimit'
-  | 'penetration.memorySync.enabled'
-  | 'penetration.memorySync.importance';
 
 export type SettingsSection =
   | 'role'
@@ -86,7 +80,7 @@ export type SettingsSection =
   | 'editor'
   | 'model'
   | 'layout'
-  | 'penetration'
+  | 'plugins'
   | 'advanced';
 
 export interface SettingsDiscoverySnapshot {
@@ -124,11 +118,9 @@ export type WebviewToHostMessage =
   | { type: 'regenerate' }
   | { type: 'editResend'; messageId: string; newText: string }
   | { type: 'deleteMessage'; messageId: string }
-  | { type: 'appendDiary' }
-  | { type: 'writeLetter' }
+  | { type: 'toolbarAction'; command: string }
   | { type: 'reconnectKernel' }
   | { type: 'switchSession'; sessionId: string }
-  | { type: 'syncDiaryMemory' }
   | { type: 'newChat' }
   | { type: 'selectRole'; roleId: string }
   | { type: 'resizePortraitPane'; height: number }

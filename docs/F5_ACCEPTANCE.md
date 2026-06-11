@@ -1,6 +1,8 @@
 # F5 / VSIX 实机验收矩阵（V-VSCODE-PERF-05）
 
-**版本**：0.3.2 · **场景**：`scene_id = vscode` · **默认角色**：`mumu`
+**版本**：0.4.0 · **场景**：`scene_id = vscode` · **默认角色**：`mumu`
+
+**三仓 F5**：打开 [`oclive-vscode.code-workspace`](../oclive-vscode.code-workspace)，分别对核心与渗透扩展执行「Run Extension」。
 
 ---
 
@@ -48,7 +50,7 @@ npm run package
 
 | # | 步骤 | 期望 |
 |---|------|------|
-| V1 | 产物 `oclive-vscode-0.3.2.vsix` 存在 | `vsce package` 成功 |
+| V1 | 产物 `oclive-vscode-0.4.0.vsix` 存在 | `vsce package` 成功 |
 | V2 | VS Code「从 VSIX 安装」 | 扩展激活；OCLive 侧栏可见 |
 | V3 | 安装后 attach 或 spawn 各跑一轮 | 同 A/B 聊天期望 |
 
@@ -66,16 +68,26 @@ npm run test:capability
 
 ---
 
-## 渗透烟测（VS-2 / 0.3.2）
+## 清单 A · 仅核心（0.4.0）
 
 | # | 步骤 | 期望 |
 |---|------|------|
-| P1 | Chat「记入日记」 | 首次弹授权；`.oclive/mumu/diary.md` 追加 |
-| P2 | 拒绝授权 | 不写盘 |
-| P3 | `OCLive: Write Letter` 或 Chat「写一封信」 | `.oclive/mumu/letters/*.md` 创建 |
-| P4 | `OCLive: Reveal .oclive Folder` | 资源管理器展开角色目录 |
-| P5 | 设置 → 渗透 → 提交记忆（C2 开） | `update_memory` 成功 toast |
-| P6 | 无工作区文件夹时开 Chat | 可聊；渗透按钮提示需打开文件夹 |
+| C1 | F5 仅核心扩展 | Chat 可聊；顶栏 **无** 记入日记/写信 |
+| C2 | 命令面板 | **无** `oclive.appendDiary` 等旧命令 |
+| C3 | 设置 → 插件 | 显示渗透插件安装引导 |
+| C4 | `npm run test:unit` | 绿（无 penetration 单测） |
+
+## 清单 B · 核心 + 渗透插件
+
+| # | 步骤 | 期望 |
+|---|------|------|
+| P1 | F5 核心 + `oclive-vscode-penetration` | Chat 顶栏出现记入日记/写信 |
+| P2 | Chat「记入日记」 | 首次弹授权；`.oclive/mumu/diary.md` 追加 |
+| P3 | `oclive-penetration.writeLetter` | `.oclive/mumu/letters/*.md` 创建 |
+| P4 | `oclive-penetration.revealOcliveFolder` | 资源管理器展开角色目录 |
+| P5 | `oclive-penetration.syncDiaryMemory`（C2 开） | `update_memory` 成功 toast |
+| P6 | 无工作区文件夹 | 可聊；渗透写盘提示需打开文件夹 |
+| P7 | 渗透仓 `npm run test:unit` | 绿 |
 
 ---
 
@@ -96,5 +108,6 @@ npm run test:capability
 - [ ] 路径 B spawn
 - [ ] VSIX 安装
 - [ ] `test:unit` + `test:ensure-report` + `test:capability`
-- [ ] 渗透 P1–P6
+- [ ] 清单 A 仅核心 C1–C4
+- [ ] 清单 B 核心+渗透 P1–P7
 - [ ] MCP（可选，agent profile）

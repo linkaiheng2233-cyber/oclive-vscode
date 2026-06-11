@@ -126,8 +126,8 @@ await test('returns the operation result to the caller', async () => {
 const { formatKernelErrorForUser } = await import(
   pathToFileURL(path.join(outDir, 'kernelError.js')).href
 );
-const { pathMatchesAllowedGlobs, resolveDiaryPath } = await import(
-  pathToFileURL(path.join(outDir, 'penetration', 'paths.js')).href
+const { pathMatchesAllowedGlobs } = await import(
+  pathToFileURL(path.join(outDir, 'hostApi', 'pathGlobs.js')).href
 );
 
 console.log('formatKernelErrorForUser');
@@ -146,12 +146,7 @@ await test('appends hint when present', () => {
   assert.match(msg, /retry/);
 });
 
-console.log('penetration paths');
-await test('resolveDiaryPath substitutes roleId', () => {
-  const p = resolveDiaryPath('C:\\ws', 'mumu', '.oclive/{roleId}/diary.md');
-  assert.match(p.replace(/\\/g, '/'), /\/\.oclive\/mumu\/diary\.md$/);
-});
-
+console.log('workspaceWrite globs');
 await test('pathMatchesAllowedGlobs accepts .oclive/**', () => {
   assert.equal(pathMatchesAllowedGlobs('.oclive/mumu/diary.md', ['.oclive/**']), true);
   assert.equal(pathMatchesAllowedGlobs('src/main.ts', ['.oclive/**']), false);
@@ -161,40 +156,6 @@ await test('pathMatchesAllowedGlobs rejects paths outside whitelist', () => {
   assert.equal(pathMatchesAllowedGlobs('src/secrets.env', ['.oclive/**']), false);
   assert.equal(pathMatchesAllowedGlobs('.oclive/mumu/letters/note.md', ['.oclive/**']), true);
   assert.equal(pathMatchesAllowedGlobs('README.md', ['.oclive/**', 'docs/*']), false);
-});
-
-await test('resolveDiaryPath rejects .. traversal', () => {
-  assert.throws(
-    () => resolveDiaryPath('C:\\ws', 'mumu', '../outside/diary.md'),
-    /非法渗透路径/,
-  );
-});
-
-const { formatDiaryEntry, summarizeDiaryForMemory } = await import(
-  pathToFileURL(path.join(outDir, 'penetration', 'templates.js')).href
-);
-
-console.log('formatDiaryEntry');
-await test('formatDiaryEntry includes user and role lines', () => {
-  const entry = formatDiaryEntry({
-    userText: '你好',
-    assistantText: '嗨',
-    roleName: '木木',
-    headerLine: '今日片段',
-  });
-  assert.match(entry, /\*\*你\*\*：你好/);
-  assert.match(entry, /\*\*木木\*\*：嗨/);
-  assert.match(entry, /> 今日片段/);
-});
-
-console.log('summarizeDiaryForMemory');
-await test('summarizeDiaryForMemory prefers today sections', () => {
-  const today = new Date().toISOString().slice(0, 10);
-  const md = `## ${today}T10:00:00.000Z\nline one\n\n## 2020-01-01T00:00:00.000Z\nold`;
-  const summary = summarizeDiaryForMemory(md);
-  assert.match(summary, /工作区日记摘要/);
-  assert.match(summary, /line one/);
-  assert.doesNotMatch(summary, /old/);
 });
 
 if (failures > 0) {

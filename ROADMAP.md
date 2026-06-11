@@ -1,7 +1,7 @@
 # oclive-vscode 路线图
 
-**战略（以角色为基点 · 非 Cursor）**：[`docs/STRATEGY.md`](docs/STRATEGY.md)  
-**决策门锁定**：[`docs/GATE_DECISIONS.md`](docs/GATE_DECISIONS.md)
+**战略（以角色为基点 · 渗透插件化）**：[`docs/STRATEGY.md`](docs/STRATEGY.md) · [`docs/PENETRATION_PLUGIN_MODEL.md`](docs/PENETRATION_PLUGIN_MODEL.md)  
+**决策门**：[`docs/GATE_DECISIONS.md`](docs/GATE_DECISIONS.md)
 
 ---
 
@@ -10,80 +10,71 @@
 | 阶段 | 北极星 | 状态 |
 |------|--------|------|
 | **VS-1** 聊天底座 | 与基础聊天发行版同级的流畅易用 | **Done**（0.3.2） |
-| **VS-2** 渗透 v1/v2 | 角色在工作区留痕（日记、信、`.oclive/`） | **Done**（0.3.2） |
-| **VS-3** 渗透可配置 | 白名单 / 模板 / validation / 记忆 C2 | **Done**（0.3.2） |
-| **VS-4** 可选 Agent | MCP HTTP + QuickPick（高级 profile） | **Done**（0.3.2 · 默认 profile 无入口） |
-| **0.4 波次 5** | pack-editor 情绪图 · vscode-lite 导出 | **Deferred** — [`WAVE5_ASSETS_ASSESSMENT.md`](docs/WAVE5_ASSETS_ASSESSMENT.md) |
+| **VS-2P** 渗透插件化 | 日记+信+idle 等 **独立插件**；核心宿主 API | **Next**（0.4.0） |
+| **VS-3P** 渗透生态 | 第三方样例 · 核心默认无内置渗透 | **Planned**（0.4–0.5） |
+| **VS-4** 可选 Agent | MCP HTTP + QuickPick（高级 profile） | **Done**（0.3.2 · 默认无入口） |
+| **0.4 波次 5** | pack-editor 情绪图 · vscode-lite 导出 | **Deferred** |
 
-渗透与内核 **Agent 槽正交**：VS-2/VS-3 **不需要** `skip_agent = false`。详见战略文档 §3。
+**0.3.x 内置渗透（原 VS-2/VS-3）**：**Done 但 deprecated** — 迁移目标见 [`PENETRATION_PLUGIN_MODEL.md`](docs/PENETRATION_PLUGIN_MODEL.md) §5。
 
 ---
 
-## VS-1 · 聊天底座（0.3.x → 0.3.1）
+## VS-1 · 聊天底座（0.3.x）
 
 - [x] 内核 attach / spawn（8420）
-- [x] 侧栏：顶栏立绘（包内图或 emoji）+ 对话（统一 Svelte webview）
-- [x] `scenes/vscode` 欢迎语
-- [x] Setup、状态栏、编辑器上下文
-- [x] 聊天历史持久化（`GET /chat/sessions` + `/chat/messages`，共享 `OCLIVE_APP_DATA`）
-- [x] 状态栏 tooltip（数据目录 / attach vs spawn）
-- [x] 用户身份（设置页 Identity 分区；Chat meta 状态条深链）
-- [x] **OCLive: Select Role**（QuickPick 或 Chat 顶栏）
-- [x] **设置 Webview**（Svelte + Vite）：Kernel / Editor / Role / Identity / Model / Layout / Penetration / Advanced
-- [x] 主仓 HTTP LLM 路由（`/llm/user_settings`、`/llm/ollama_models`、`/llm/session_model`）
-- [x] `kernelClient` 扩展（Health JSON、完整 RoleInfo、LLM API、`ensureReady` 短 TTL 缓存）
-- [x] Chat ↔ Settings 应用内路由（无整页 `webview.html` 重置）
-- [x] **聊天体验**：停止生成（AbortSignal）、加载计时/冷启动提示、Ollama 预热、`POST /chat/stream` 逐 token（`oclive.chat.streaming`）
-- [x] **破壁元操作**：撤回/重生成/编辑重发/删单条（`meta_action_templates` + `/chat/storage`）
-- [x] **V-VSCODE-PERF-05** F5 实机验收（attach + spawn 两路径）— 清单 [`docs/F5_ACCEPTANCE.md`](docs/F5_ACCEPTANCE.md)
-- [x] **V-VSCODE-PERF-05** 首次 `.vsix` 发布（`npm run package` → `oclive-vscode-0.3.x.vsix`）
-- [x] **0.3.2** 聊天第二轮：性能 mark · 重连 · 历史会话下拉 · 无工作区提示
-
-### VS-1 与基础聊天 parity
-
-- [x] 互动模式：**永久 pure_chat**（`allow_mode_switch=false`；见 [`GATE_DECISIONS.md`](docs/GATE_DECISIONS.md)）
-- [x] 身份流程：设置直选（文档固定；无桌面惊喜解锁）
-- [ ] 聊天存储管理（搜索/导出）— 优先级低于渗透
+- [x] 侧栏：立绘 + 对话（Svelte webview）
+- [x] `scenes/vscode` 欢迎语 · 历史 · 身份 · 模型 · 流式 · 元操作
+- [x] 设置 Webview（Kernel / Role / Identity / Model / Layout / Advanced）
+- [x] F5 / `.vsix` · 性能 mark · 重连 · 会话下拉
+- [x] **永久 pure_chat**（`allow_mode_switch=false`）
 
 ---
 
-## VS-2 · 渗透 v1（角色在工作区留痕）
+## VS-2P · 渗透插件化（0.4.0 · 当前方向）
 
-| 能力 | 说明 | 状态 |
-|------|------|------|
-| 工作区约定 | `.oclive/{roleId}/` 目录语义 | **Done** |
-| 写日记 | Chat「记入日记」+ `oclive.appendDiary` | **Done** |
-| 授权 / `.gitignore` | 首次写盘确认；可选加入 `.gitignore` | **Done** |
-| 终端一行 | `oclive.penetration.terminal.enabled` | **Done** |
-| idle 提醒 | `oclive.penetration.idle.*` | **Done** |
-| 信 | `letters/` + `oclive.writeLetter` · `revealOcliveFolder` | **Done**（0.3.2） |
-| N 轮日记提示 | `autoDiaryEveryNTurns` + InformationMessage | **Done**（0.3.2） |
+| 项 | 说明 | 状态 |
+|----|------|------|
+| 战略文档 | `PENETRATION_PLUGIN_MODEL.md` · 决策门 D | **Done** |
+| 宿主 API | `onChatTurnCompleted` · `requestWorkspaceWrite` · 历史/角色包读取 | **Planned** |
+| 官方插件仓 | `oclive-vscode-penetration`（extensionDependencies） | **Planned** |
+| 功能 parity | 从 `src/penetration/*` 迁出：日记 · 信 · idle · 终端 · C2 | **Planned** |
+| 核心 deprecated | 内置渗透标记过渡；设置页引导安装插件 | **Planned** |
+| 核心默认 | `oclive.penetration.enabled` → **false**（0.4.x） | **Planned** |
+| 核心移除 | 删除内置 `penetration/`（0.5.0） | **Planned** |
+
+**原则**：日记与写信 **同一插件包**；核心 **不** 再扩展新的内置渗透功能。
 
 ---
 
-## VS-3 · 渗透可配置
+## VS-2/VS-3 · 内置渗透（0.3.x · deprecated）
 
-- [x] `oclive.penetration.*` 设置 + 设置页 **渗透** 分区
-- [x] 角色包 `penetration_templates`（扩展 + 主仓 `oclive_validation`）
-- [x] 工作区 `.oclive/config.json` 合并链（优先级低于用户设置）
-- [x] 记忆 C2：手动「日记摘要提交记忆」→ `bridge/dispatch` · `update_memory`
-- [x] `distro.oclive.toml` `[penetration]` 段声明（扩展 spawn 默认）
+| 能力 | 0.3.2 状态 | 0.4+ |
+|------|------------|------|
+| `.oclive/{roleId}/` · 日记 | 核心内置 | → 渗透插件 |
+| 写信 · idle · 终端 | 核心内置 | → 渗透插件 |
+| `oclive.penetration.*` | 核心设置 | → 插件设置 + 宿主 API |
+| `penetration_templates` validation | 主仓 | **保留**（插件读取） |
+
+---
+
+## VS-3P · 渗透生态（0.4–0.5）
+
+- [ ] 第三方「最小渗透插件」样例（仅写自定义 md）
+- [ ] 插件市场 / Open VSX 分列「核心」与「官方渗透」
+- [ ] 创作者文档：自写渗透 vs 用官方插件
+- [ ] `distro.oclive.toml` `[penetration]` 迁至插件 profile
 
 ---
 
 ## VS-4 · 可选 Agent（高级用户）
 
-- [x] 文档：[`docs/VS4_AGENT.md`](docs/VS4_AGENT.md) + `vscode-agent.oclive.toml` 示例
-- [x] `OCLive: List MCP Servers` + `/high_risk/grant` 授权胶水
-- [x] 内核 `/mcp/servers|tools|call`（主仓 Gate — [`VSCODE_MCP_HTTP_GATE.md`](../oclivenewnew/handoff/VSCODE_MCP_HTTP_GATE.md)）
-- [x] 扩展 MCP QuickPick + Output（`vscode-agent` profile / `OCLive: Call MCP Tool (Advanced)`）
-- [ ] 聊天存储管理（搜索/导出）— 0.5.x
-- **非默认路径**；不替代 VS-2 确定性渗透
+- [x] [`docs/VS4_AGENT.md`](docs/VS4_AGENT.md) · 内核 `/mcp/*` · QuickPick
+- **与渗透插件正交**；不替代 VS-2P
 
 ---
 
 ## 依赖主仓 / 编写器
 
-- 技术契约：[VSCODE_DISTRIBUTION.md](docs/VSCODE_DISTRIBUTION.md) · 主仓 [VSCODE_DISTRIBUTION.md](../oclivenewnew/creator-docs/role-pack/VSCODE_DISTRIBUTION.md)
+- 契约：[VSCODE_DISTRIBUTION.md](docs/VSCODE_DISTRIBUTION.md)
 - 跨宿主记忆：[CROSS_HOST_MEMORY.md](../oclivenewnew/creator-docs/role-pack/CROSS_HOST_MEMORY.md)
-- 发行版 profile 示例：`oclivenewnew/examples/distro-profiles/vscode.oclive.toml`
+- Profile 示例：`oclivenewnew/examples/distro-profiles/vscode.oclive.toml`

@@ -2,6 +2,27 @@
 
 All notable changes to the OCLive VS Code extension are documented here.
 
+## [Unreleased]
+
+## [0.4.0] — 2026-06-11 · **Breaking**
+
+### Added
+
+- **宿主 API v1**：`activate()` 导出 `OcliveHostApi`；npm 契约 [`@oclive/vscode-host`](../oclive-vscode-host/README.md)
+- **Chat 动态工具栏**：`registerChatToolbarAction` 插槽（未装渗透插件时顶栏无日记/信按钮）
+- **设置 → 插件**：安装官方渗透插件引导；[`MIGRATION_0.3_to_0.4.md`](docs/MIGRATION_0.3_to_0.4.md)
+
+### Removed · Breaking
+
+- **内置渗透**：删除 `src/penetration/*`、`oclive.appendDiary` / `writeLetter` / `revealOcliveFolder` / `syncDiaryMemory`
+- **设置键**：`oclive.penetration.*`（迁移至姊妹扩展 `oclive-penetration.*`）
+- **无 shim**：旧命令 ID 不转发
+
+### Migration
+
+- 须安装 **`oclive.oclive-vscode-penetration`** 恢复日记/信能力
+- 命令改为 `oclive-penetration.*`；见 [`docs/MIGRATION_0.3_to_0.4.md`](docs/MIGRATION_0.3_to_0.4.md)
+
 ## [0.3.2] — 2026-06-11
 
 ### Added

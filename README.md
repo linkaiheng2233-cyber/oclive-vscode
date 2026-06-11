@@ -23,20 +23,22 @@ When a **full** dev/desktop binary is found and `oclive.promoteSharedKernel` is 
 - Health fails → spawn best binary with `--api --port 8420` (primary, then bundled fallback).
 - Chat uses **`scene_id=vscode`**, own **`session_id`**, demo role **`mumu`**.
 - Sidebar: portrait from `roles/{id}/assets/images/` + chat; welcome from `scenes/vscode/scene.json`.
-- **User identity**: command **OCLive: Select User Identity** (or tag in chat webview); status bar second item shows identity + reply post-processor state from `GET /role_info`.
+- **User identity**: command **OCLive: Select User Identity** (or tag in chat webview).
 
-## Commands
+**Penetration (diary, letters, `.oclive/` writes)** — **0.4+ separate extension** [`oclive-vscode-penetration`](../oclive-vscode-penetration). Core = chat platform + [`@oclive/vscode-host`](../oclive-vscode-host) API. See [`docs/MIGRATION_0.3_to_0.4.md`](docs/MIGRATION_0.3_to_0.4.md).
+
+## Commands (core)
 
 | Command | Action |
 |---------|--------|
 | **OCLive: Open Chat** | Focus sidebar |
-| **OCLive: Setup** | Re-run auto-discovery (or manual pick if nothing found) |
-| **OCLive: Select Role** | Pick role folder under `rolesDir` |
-| **OCLive: Select User Identity** | Switch User Identity Prompt Template when `user_identities/` exists |
+| **OCLive: Setup** | Re-run auto-discovery |
+| **OCLive: Select Role** | Pick role folder |
+| **OCLive: Select User Identity** | Switch identity template |
 | **OCLive: Reconnect Kernel** | Refresh attach/spawn |
-| **OCLive: Append to Diary** | Append last turn to `.oclive/{roleId}/diary.md` |
-| **OCLive: Sync Diary Summary to Memory** | Optional C2: `update_memory` via bridge |
-| **OCLive: List MCP Servers (Advanced)** | VS-4: list + grant MCP (see `docs/VS4_AGENT.md`) |
+| **OCLive: List MCP Servers (Advanced)** | VS-4 · see `docs/VS4_AGENT.md` |
+
+**Penetration commands** (`Append to Diary`, etc.) — **0.3.x only in core**; moving to plugin. See roadmap.
 
 Roadmap: [ROADMAP.md](./ROADMAP.md).
 

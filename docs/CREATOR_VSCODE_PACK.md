@@ -1,7 +1,9 @@
 # OCLive VS Code 扩展 · 创作者包指南
 
-**受众**：角色包作者、高级用户  
-**战略**：[`STRATEGY.md`](./STRATEGY.md) · 决策门 [`GATE_DECISIONS.md`](./GATE_DECISIONS.md)
+**受众**：角色包作者、高级用户、**渗透插件作者**  
+**战略**：[`STRATEGY.md`](./STRATEGY.md) · **插件模型** [`PENETRATION_PLUGIN_MODEL.md`](./PENETRATION_PLUGIN_MODEL.md)
+
+> **2026-06 方向**：日记/信等渗透能力 **由插件实现**（官方参考插件 + 自写）。角色包字段与 `.oclive/` 约定 **仍有效**，供插件读取；核心扩展 0.4 起不再内置 UI。
 
 ---
 
@@ -69,14 +71,14 @@
 
 ## VS Code 命令对照
 
-| 命令 | 行为 |
-|------|------|
-| `oclive.appendDiary` | 最近一轮 → 日记 |
-| `oclive.writeLetter` | 写信到 `letters/`（写前预览） |
-| `oclive.revealOcliveFolder` | 资源管理器定位 `.oclive/{roleId}` |
-| `oclive.syncDiaryMemory` | C2 · 日记摘要 → 长期记忆（需设置开启） |
+| 命令 | 行为 | 0.4+ 归属 |
+|------|------|-----------|
+| `oclive.appendDiary` | 最近一轮 → 日记 | **渗透插件** |
+| `oclive.writeLetter` | 写信到 `letters/` | **渗透插件** |
+| `oclive.revealOcliveFolder` | 定位 `.oclive/{roleId}` | 核心 API 或插件 |
+| `oclive.syncDiaryMemory` | C2 · 日记摘要 → 长期记忆 | **渗透插件** |
 
-Chat 侧栏工具栏提供「记入日记」「写信」「历史会话」「重连」。
+0.3.x：上述命令仍在核心扩展；Chat 侧栏工具栏含「记入日记」「写信」。
 
 ---
 

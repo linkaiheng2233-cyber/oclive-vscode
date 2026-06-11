@@ -1,11 +1,19 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
 
-const GRANTED_WORKSPACES_KEY = 'oclive.penetration.grantedWorkspaces';
-const GITIGNORE_PROMPTED_KEY = 'oclive.penetration.gitignorePrompted';
+import type { WorkspaceWriteRequest, WorkspaceWriteResult } from '@oclive/vscode-host';
+
+const GRANTED_WORKSPACES_KEY = 'oclive.host.grantedWorkspaces';
+const GITIGNORE_PROMPTED_KEY = 'oclive.host.gitignorePrompted';
 
 function workspaceKey(folder: vscode.WorkspaceFolder): string {
   return folder.uri.toString();
 }
+
+import { pathMatchesAllowedGlobs } from './pathGlobs';
+
+export { pathMatchesAllowedGlobs } from './pathGlobs';
 
 export async function ensureWorkspaceWriteAuthorized(
   context: vscode.ExtensionContext,
@@ -16,7 +24,7 @@ export async function ensureWorkspaceWriteAuthorized(
     return true;
   }
   const choice = await vscode.window.showWarningMessage(
-    `OCLive 将在工作区写入角色渗透文件（如 .oclive/）。是否允许写入「${folder.name}」？`,
+    `OCLive 将在工作区写入文件。是否允许写入「${folder.name}」？`,
     { modal: true },
     '允许',
     '拒绝',
@@ -66,5 +74,47 @@ export async function maybePromptGitignore(
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     void vscode.window.showWarningMessage(`无法更新 .gitignore：${msg}`);
+  }
+}
+
+async function ensureParentDir(filePath: string): Promise<void> {
+  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+}
+
+export async function requestWorkspaceWrite(
+  context: vscode.ExtensionContext,
+  req: WorkspaceWriteRequest,
+): Promise<WorkspaceWriteResult> {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (!folder) {
+    return { ok: false, message: '请先打开一个工作区文件夹' };
+  }
+
+  const root = folder.uri.fsPath;
+  const rel = path.relative(root, req.absolutePath).replace(/\\/g, '/');
+  if (rel.startsWith('..') || path.isAbsolute(rel)) {
+    return { ok: false, message: `路径不在工作区内：${req.absolutePath}` };
+  }
+
+  if (!pathMatchesAllowedGlobs(req.relativePosix || rel, req.allowedGlobs)) {
+    return { ok: false, message: `路径不在白名单内：${rel}` };
+  }
+
+  if (!(await ensureWorkspaceWriteAuthorized(context, folder))) {
+    return { ok: false, message: '未授权写入此工作区' };
+  }
+
+  try {
+    await ensureParentDir(req.absolutePath);
+    if (req.mode === 'append') {
+      await fs.promises.appendFile(req.absolutePath, req.content, 'utf8');
+    } else {
+      await fs.promises.writeFile(req.absolutePath, req.content, 'utf8');
+    }
+    await maybePromptGitignore(context, folder);
+    return { ok: true, message: `已写入 ${rel}`, filePath: req.absolutePath };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, message: msg };
   }
 }

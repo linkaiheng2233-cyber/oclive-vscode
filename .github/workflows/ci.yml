@@ -23,6 +23,11 @@ jobs:
         with:
           node-version: "20"
           cache: npm
+      - name: Build @oclive/vscode-host
+        run: |
+          if [ -d ../oclive-vscode-host ]; then
+            cd ../oclive-vscode-host && npm ci && npm run build
+          fi
       - run: npm ci
       - run: npm run compile:all
       - run: npm run lint

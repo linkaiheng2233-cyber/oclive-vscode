@@ -41,8 +41,3 @@ event = "builtin"
 prompt = "builtin"
 llm = "ollama"
 
-# VS-3: extension-side defaults; parsed in oclive-vscode (not host_profile yet).
-[penetration]
-enabled = true
-diary_path = ".oclive/{roleId}/diary.md"
-auto_diary_every_n_turns = 0

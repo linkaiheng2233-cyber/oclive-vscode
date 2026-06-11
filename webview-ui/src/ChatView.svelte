@@ -1,6 +1,12 @@
 <script lang="ts">
   import { afterUpdate, onMount } from 'svelte';
-  import type { ChatLine, ChatPatchPayload, RoleOptionSnapshot, SettingsSection } from '@protocol';
+  import type {
+    ChatLine,
+    ChatPatchPayload,
+    ChatToolbarActionSnapshot,
+    RoleOptionSnapshot,
+    SettingsSection,
+  } from '@protocol';
   import { getVsCodeApi } from './vscode';
 
   const vscode = getVsCodeApi();
@@ -26,6 +32,7 @@
   let sessionOptions: { id: string; label: string }[] = [];
   let currentSessionId = '';
   let workspaceHint = '';
+  let toolbarActions: ChatToolbarActionSnapshot[] = [];
   let inputMinHeight = 52;
   let lines: ChatLine[] = [];
   let inputValue = '';
@@ -72,6 +79,7 @@
     if (p.sessionOptions != null) sessionOptions = p.sessionOptions;
     if (p.currentSessionId != null) currentSessionId = p.currentSessionId;
     if (p.workspaceHint != null) workspaceHint = p.workspaceHint;
+    if (p.toolbarActions != null) toolbarActions = p.toolbarActions;
     if (p.streamingReply !== undefined) streamingReply = p.streamingReply;
     mergeLines(p.lines, p.appendLines);
   }
@@ -230,24 +238,20 @@
         {/each}
       {/if}
     </select>
-    <button
-      type="button"
-      class="btn btn-secondary"
-      title="将最近一轮对话记入工作区日记"
-      disabled={sending}
-      on:click={() => post({ type: 'appendDiary' })}
-    >
-      <span aria-hidden="true">📓</span> 记入日记
-    </button>
-    <button
-      type="button"
-      class="btn btn-secondary"
-      title="写一封信到 .oclive/letters/"
-      disabled={sending}
-      on:click={() => post({ type: 'writeLetter' })}
-    >
-      <span aria-hidden="true">✉</span> 写信
-    </button>
+    {#each toolbarActions as action (action.id)}
+      <button
+        type="button"
+        class="btn btn-secondary"
+        title={action.title ?? action.label}
+        disabled={sending}
+        on:click={() => post({ type: 'toolbarAction', command: action.command })}
+      >
+        {#if action.icon}
+          <span aria-hidden="true">{action.icon}</span>
+        {/if}
+        {action.label}
+      </button>
+    {/each}
     <button type="button" class="btn btn-secondary" title="设置" on:click={() => post({ type: 'openSettings' })}>
       <span aria-hidden="true">⚙</span> 设置
     </button>
