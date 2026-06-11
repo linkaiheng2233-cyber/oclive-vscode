@@ -17,23 +17,25 @@ permissions:
 jobs:
   vscode:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: oclive-vscode
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: oclive-vscode
       - uses: actions/checkout@v4
         with:
           repository: linkaiheng2233-cyber/oclive-vscode-host
-          path: ../oclive-vscode-host
+          path: oclive-vscode-host
           ref: main
-        continue-on-error: true
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
+          cache-dependency-path: oclive-vscode/package-lock.json
       - name: Build @oclive/vscode-host
-        run: |
-          if [ -d ../oclive-vscode-host ]; then
-            cd ../oclive-vscode-host && npm ci && npm run build
-          fi
+        run: cd ../oclive-vscode-host && npm ci && npm run build
       - run: npm ci
       - run: npm run compile:all
       - run: npm run lint
