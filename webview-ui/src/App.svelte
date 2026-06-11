@@ -18,6 +18,12 @@
   import LayoutSection from './sections/LayoutSection.svelte';
   import AdvancedSection from './sections/AdvancedSection.svelte';
   import PluginsSection from './sections/PluginsSection.svelte';
+  import StorageSection from './sections/StorageSection.svelte';
+  import type {
+    ChatStorageCapabilitiesSnapshot,
+    ChatStorageSearchHit,
+    ChatStorageSessionSnapshot,
+  } from '@protocol';
 
   const vscode = getVsCodeApi();
 
@@ -28,6 +34,7 @@
     { id: 'identity', label: '身份' },
     { id: 'model', label: '模型' },
     { id: 'layout', label: '布局' },
+    { id: 'storage', label: '存储' },
     { id: 'plugins', label: '插件' },
     { id: 'advanced', label: '高级' },
   ];
@@ -41,6 +48,11 @@
   let llmOperationDone: Extract<HostToWebviewMessage, { type: 'llmOperationDone' }> | null = null;
   let llmOpSeq = 0;
   let ollamaModelsSeq = 0;
+  let storageCapabilities: ChatStorageCapabilitiesSnapshot | null = null;
+  let storageSessions: ChatStorageSessionSnapshot[] = [];
+  let storageSearchHits: ChatStorageSearchHit[] = [];
+  let storageLoading = false;
+  let storageError = '';
 
   function post(msg: WebviewToHostMessage): void {
     vscode.postMessage(msg);
@@ -91,6 +103,17 @@
           toast = '';
         }, 4000);
       }
+      if (msg.type === 'storageState') {
+        storageLoading = false;
+        storageCapabilities = msg.capabilities;
+        storageSessions = msg.sessions;
+        storageError = msg.error ?? '';
+      }
+      if (msg.type === 'storageSearchResult') {
+        storageLoading = false;
+        storageSearchHits = msg.hits;
+        if (msg.error) storageError = msg.error;
+      }
     };
     window.addEventListener('message', handler);
     post({ type: 'ready' });
@@ -140,6 +163,16 @@
             />
           {:else if activeSection === 'layout'}
             <LayoutSection {state} {post} />
+          {:else if activeSection === 'storage'}
+            <StorageSection
+              {state}
+              {post}
+              capabilities={storageCapabilities}
+              sessions={storageSessions}
+              searchHits={storageSearchHits}
+              storageLoading={storageLoading}
+              storageError={storageError}
+            />
           {:else if activeSection === 'plugins'}
             <PluginsSection />
           {:else if activeSection === 'advanced'}

@@ -1,10 +1,6 @@
-# Extension-bundled kernel (fallback)
+# Extension-bundled kernel (distro default spawn)
 
-Place **`oclive-kernel-server.exe`** here for offline / degraded spawn when:
-
-- nothing is listening on `:8420`, and
-- `%LOCALAPPDATA%\OCLive\runtime\` has no shared kernel, and
-- no dev build was auto-discovered.
+Place **`oclive-kernel-server.exe`** here as the **VS Code distro bundled kernel** — the **preferred** spawn candidate when nothing listens on `:8420`.
 
 Generate from repo root:
 
@@ -13,4 +9,6 @@ cd D:\oclive-vscode
 .\scripts\bundle-kernel.ps1
 ```
 
-Primary runtime on a dev machine is usually the **shared** copy promoted from the fullest local build (`oclivenewnew-tauri --api` or `oclive-kernel-server`).
+**Spawn order (product SSOT):** bundled (`bin/`) → shared `%LOCALAPPDATA%\OCLive\runtime\` (same app_data / profile / plugins) → dev auto-discovery. See main repo `KERNEL_SCHEDULER_RESCOPE.md`.
+
+On dev machines, **`promoteSharedKernel`** may copy a local build into shared runtime — maintenance only, not the end-user default.

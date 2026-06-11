@@ -11,9 +11,9 @@
 |------|--------|------|
 | **VS-1** 聊天底座 | 与基础聊天发行版同级的流畅易用 | **Done**（0.3.2） |
 | **VS-2P** 渗透插件化 | 日记+信+idle 等 **独立插件**；核心宿主 API | **Done**（0.4.0） |
-| **VS-3P** 渗透生态 | 第三方样例 · 核心默认无内置渗透 | **In progress**（0.4–0.5） |
+| **VS-3P** 渗透生态 | 第三方样例 · 核心默认无内置渗透 | **Done**（0.4.1 · Open VSX 见 Deferred） |
 | **VS-4** 可选 Agent | MCP HTTP + QuickPick（高级 profile） | **Done**（0.3.2 · 默认无入口） |
-| **0.4 波次 5** | pack-editor 情绪图 · vscode-lite 导出 | **Deferred** |
+| **0.4 波次 5** | pack-editor 情绪图 · vscode-lite 导出 | **In progress**（0.5 规划） |
 
 **0.3.x 内置渗透（原 VS-2/VS-3）**：**Done 但 deprecated** — 迁移目标见 [`PENETRATION_PLUGIN_MODEL.md`](docs/PENETRATION_PLUGIN_MODEL.md) §5。
 
@@ -60,9 +60,10 @@
 ## VS-3P · 渗透生态（0.4–0.5）
 
 - [x] 第三方「最小渗透插件」样例（`oclive-vscode-host/examples/minimal-penetration`）
-- [ ] 插件市场 / Open VSX 分列「核心」与「官方渗透」
+- [ ] 插件市场 / Open VSX 分列「核心」与「官方渗透」 → [`docs/DEFERRED.md`](docs/DEFERRED.md)
 - [x] 创作者文档：自写渗透 vs 用官方插件（`PENETRATION_PLUGIN_AUTHOR.md`）
-- [ ] `distro.oclive.toml` `[penetration]` 迁至插件 profile
+- [x] `distro.oclive.toml` `[penetration]` 迁至插件 profile（`vscode-penetration.oclive.toml`）
+- [x] npm `@oclive/vscode-host` registry 依赖（^0.2.0）
 
 ---
 

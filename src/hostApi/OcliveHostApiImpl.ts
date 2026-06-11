@@ -4,10 +4,12 @@ import {
   HOST_API_VERSION,
   type ChatToolbarAction,
   type ChatToolbarActionSnapshot,
+  type ChatHistoryEntry,
   type ChatTurnCompletedEvent,
   type ChatTurnSnapshot,
   type EditorContextSnapshot,
   type KernelClientFacade,
+  type KernelDisconnectedEvent,
   type KernelReadyEvent,
   type OcliveHostApi,
   type WorkspaceWriteRequest,
@@ -31,11 +33,14 @@ export class OcliveHostApiImpl implements OcliveHostApi {
 
   private readonly onChatTurnCompletedEmitter = new vscode.EventEmitter<ChatTurnCompletedEvent>();
   private readonly onKernelReadyEmitter = new vscode.EventEmitter<KernelReadyEvent>();
+  private readonly onKernelDisconnectedEmitter =
+    new vscode.EventEmitter<KernelDisconnectedEvent>();
   private readonly toolbarActions = new Map<string, ChatToolbarActionSnapshot>();
   private readonly toolbarListeners = new Set<() => void>();
 
   readonly onChatTurnCompleted = this.onChatTurnCompletedEmitter.event;
   readonly onKernelReady = this.onKernelReadyEmitter.event;
+  readonly onKernelDisconnected = this.onKernelDisconnectedEmitter.event;
 
   private deps: HostApiDeps;
 
@@ -69,6 +74,21 @@ export class OcliveHostApiImpl implements OcliveHostApi {
 
   getRecentTurn(): ChatTurnSnapshot | undefined {
     return this.deps.getRecentTurn();
+  }
+
+  async getChatHistory(sessionId?: string, limit = 50): Promise<ChatHistoryEntry[]> {
+    const eff = getEffectiveConfig();
+    const sid = sessionId?.trim() || this.deps.getSessionId();
+    if (!sid) {
+      return [];
+    }
+    const cap = Math.min(Math.max(limit, 1), 500);
+    const rows = await this.kernel.fetchChatMessages(sid, eff, cap, 0);
+    return rows.map((m) => ({
+      id: m.id,
+      role: m.sender === 'user' ? 'user' : m.sender === 'assistant' ? 'assistant' : 'system',
+      text: m.content,
+    }));
   }
 
   requestWorkspaceWrite(req: WorkspaceWriteRequest): Promise<WorkspaceWriteResult> {
@@ -123,9 +143,14 @@ export class OcliveHostApiImpl implements OcliveHostApi {
     this.onKernelReadyEmitter.fire(event);
   }
 
+  fireKernelDisconnected(event: KernelDisconnectedEvent): void {
+    this.onKernelDisconnectedEmitter.fire(event);
+  }
+
   dispose(): void {
     this.onChatTurnCompletedEmitter.dispose();
     this.onKernelReadyEmitter.dispose();
+    this.onKernelDisconnectedEmitter.dispose();
     this.toolbarActions.clear();
     this.toolbarListeners.clear();
   }

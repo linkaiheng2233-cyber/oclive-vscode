@@ -80,8 +80,32 @@ export type SettingsSection =
   | 'editor'
   | 'model'
   | 'layout'
+  | 'storage'
   | 'plugins'
   | 'advanced';
+
+export interface ChatStorageCapabilitiesSnapshot {
+  backend_kind: string;
+  supports_search: boolean;
+  supports_replay: boolean;
+  supports_cleanup: boolean;
+}
+
+export interface ChatStorageSessionSnapshot {
+  session_id: string;
+  role_id: string;
+  scene_id: string;
+  updated_at: string;
+  message_count: number;
+  last_message_snippet: string;
+}
+
+export interface ChatStorageSearchHit {
+  message_id: string;
+  session_id: string;
+  content: string;
+  created_at: string;
+}
 
 export interface SettingsDiscoverySnapshot {
   rolesDir: string;
@@ -141,7 +165,15 @@ export type WebviewToHostMessage =
   | { type: 'setSessionModel'; model: string | null; provider: 'local' | 'cloud' }
   | { type: 'refreshOllamaModels'; ollamaBaseUrl?: string }
   | { type: 'reloadLlm' }
-  | { type: 'navigateSection'; section: SettingsSection };
+  | { type: 'navigateSection'; section: SettingsSection }
+  | { type: 'loadStorageState' }
+  | { type: 'searchStorage'; query: string }
+  | {
+      type: 'exportStorage';
+      kind: 'session' | 'role';
+      format: 'markdown' | 'json';
+      sessionId?: string;
+    };
 
 /** Extension host → webview */
 export type HostToWebviewMessage =
@@ -155,4 +187,15 @@ export type HostToWebviewMessage =
       op: 'save' | 'refresh' | 'sessionModel';
       ok: boolean;
       message?: string;
+    }
+  | {
+      type: 'storageState';
+      capabilities: ChatStorageCapabilitiesSnapshot | null;
+      sessions: ChatStorageSessionSnapshot[];
+      error?: string;
+    }
+  | {
+      type: 'storageSearchResult';
+      hits: ChatStorageSearchHit[];
+      error?: string;
     };

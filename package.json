@@ -2,7 +2,7 @@
   "name": "oclive-vscode",
   "displayName": "OCLive",
   "description": "Chat with OCLive role packs from VS Code (kernel_server --api)",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "publisher": "oclive",
   "repository": {
     "type": "git",
@@ -12,7 +12,9 @@
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Other"],
+  "categories": [
+    "Other"
+  ],
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
@@ -100,8 +102,14 @@
         },
         "oclive.roleAllowlist": {
           "type": "array",
-          "items": { "type": "string" },
-          "default": ["mumu", "shimeng", "枫侵月"],
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "mumu",
+            "shimeng",
+            "枫侵月"
+          ],
           "description": "When non-empty, only these role pack ids appear in role pickers."
         },
         "oclive.chat.portraitPaneHeight": {
@@ -133,7 +141,10 @@
         },
         "oclive.settings.placement": {
           "type": "string",
-          "enum": ["sidebar", "editor-beside"],
+          "enum": [
+            "sidebar",
+            "editor-beside"
+          ],
           "default": "sidebar",
           "description": "Where to open settings: embedded in chat sidebar or beside editor."
         },

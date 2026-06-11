@@ -42,12 +42,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: oclivenewnew
-      - name: Build @oclive/vscode-host
-        run: cd ../oclive-vscode-host && npm ci && npm run build
+      - run: npm ci
+      - name: Overlay @oclive/vscode-host from sibling pack
+        run: |
+          cd ../oclive-vscode-host && npm ci && npm run build && npm pack
+          cd ../oclive-vscode && npm install ../oclive-vscode-host/oclive-vscode-host-*.tgz
       - name: Build oclive-kernel-server and oclive-cli
         working-directory: oclivenewnew
         run: cargo build -p oclive_kernel_server -p oclive-cli
-      - run: npm ci
       - run: npm run compile:all
       - run: npm run lint
       - name: Smoke (spawn → chat)

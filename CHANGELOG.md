@@ -4,6 +4,18 @@ All notable changes to the OCLive VS Code extension are documented here.
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-06-11
+
+### Added
+
+- **设置 → 存储**：会话列表、搜索、Markdown 导出（薄 UI；内核 `/chat/storage`）
+- **宿主 API v1.1**（`@oclive/vscode-host` 0.2.0）：`getChatHistory` · `onKernelDisconnected`
+
+### Changed
+
+- 依赖 `@oclive/vscode-host` ^0.2.0（registry；本地 dev 可用 `file:`）
+- 设置 → 插件分区附 Release 下载链接
+
 ## [0.4.0] — 2026-06-11 · **Breaking**
 
 ### Added

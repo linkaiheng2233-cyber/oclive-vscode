@@ -4,6 +4,16 @@ VS Code extension for [OCLive](https://github.com/linkaiheng2233-cyber/oclivenew
 
 Phase 1 contract: [CROSS_HOST_MEMORY.md](https://github.com/linkaiheng2233-cyber/oclivenewnew/blob/main/creator-docs/role-pack/CROSS_HOST_MEMORY.md).
 
+## Install（两步 · 0.4+）
+
+| 步骤 | 产物 | 获取方式 |
+|------|------|----------|
+| **1 · 核心** | `oclive.oclive-vscode` | [GitHub Release v0.4.1](https://github.com/linkaiheng2233-cyber/oclive-vscode/releases) 下载 `.vsix` → VS Code「从 VSIX 安装」 |
+| **2 · 渗透（可选）** | `oclive.oclive-vscode-penetration` | [GitHub Release v0.1.1](https://github.com/linkaiheng2233-cyber/oclive-vscode-penetration/releases) 下载 `.vsix` |
+
+- **仅装核心**：聊天、流式、历史、身份、模型 — 正常；**无**日记/写信按钮（见 [`docs/MIGRATION_0.3_to_0.4.md`](docs/MIGRATION_0.3_to_0.4.md)）
+- **插件作者**：npm [`@oclive/vscode-host`](https://www.npmjs.com/package/@oclive/vscode-host) ^0.2.0
+
 ## Zero-config (default)
 
 With **`oclive.autoDiscover`** (default `true`), the extension finds paths without manual pickers:
@@ -11,16 +21,18 @@ With **`oclive.autoDiscover`** (default `true`), the extension finds paths witho
 | Resource | Discovery order |
 |----------|-----------------|
 | **roles** | `OCLIVE_ROLES_DIR` → workspace `roles/` → sibling `oclivenewnew/roles` |
-| **kernel spawn** | `OCLIVE_KERNEL_BINARY` → settings → **`%LOCALAPPDATA%\OCLive\runtime\`** (shared) → dev `oclivenewnew-tauri` / `oclive-kernel-server` → extension **`bin/`** (fallback) |
+| **kernel spawn** | `OCLIVE_KERNEL_BINARY` pin → settings → **extension `bin/` bundled** → **`%LOCALAPPDATA%\OCLive\runtime\`** (shared fallback) → dev `oclivenewnew-tauri` / `oclive-kernel-server` |
 
-**Single writer on `:8420`**: if desktop or another host already serves `/health`, the extension **attaches** and does not spawn.
+**Single writer on `:8420`**: if desktop or another host already serves `/health` with a **profile-compatible** kernel, the extension **attaches** and does not spawn.
 
-When a **full** dev/desktop binary is found and `oclive.promoteSharedKernel` is on, it is copied to the shared runtime so launcher / VS Code / desktop share one “fullest” kernel. If shared spawn fails, the extension retries the **bundled** copy under `bin/` (run `scripts/bundle-kernel.ps1` once to populate).
+**Product target (SSOT):** spawn **this distro's bundled** kernel first; on failure, retry **shared runtime** with the same `OCLIVE_APP_DATA` / `OCLIVE_DISTRO_PROFILE` / `OCLIVE_ROLES_DIR` (plugins reuse). See main repo [KERNEL_SCHEDULER_RESCOPE.md](https://github.com/linkaiheng2233-cyber/oclivenewnew/blob/main/handoff/KERNEL_SCHEDULER_RESCOPE.md).
+
+**Dev only:** when `oclive.promoteSharedKernel` is on and a local dev build scores ≥ promote threshold, it may be copied to shared runtime — **maintenance path**, not the default end-user story. **`binary_upgrade` auto-replace of a healthy kernel is Freeze.**
 
 ## Behaviour
 
 - **`GET /health` on port 8420** → attach (no second process).
-- Health fails → spawn best binary with `--api --port 8420` (primary, then bundled fallback).
+- Health fails → spawn per shared policy (`oclive-cli kernel ensure` when available): **bundled → shared fallback** (primary product path), then dev overrides.
 - Chat uses **`scene_id=vscode`**, own **`session_id`**, demo role **`mumu`**.
 - Sidebar: portrait from `roles/{id}/assets/images/` + chat; welcome from `scenes/vscode/scene.json`.
 - **User identity**: command **OCLive: Select User Identity** (or tag in chat webview).
@@ -81,7 +93,7 @@ npm run smoke:attach   # with kernel already on 8420
 | Key | Default | Description |
 |-----|---------|-------------|
 | `oclive.autoDiscover` | `true` | Auto-find roles + kernel |
-| `oclive.promoteSharedKernel` | `true` | Promote best dev build to shared runtime |
+| `oclive.promoteSharedKernel` | `true` | **Dev:** copy local full build to shared runtime (maintenance; not default UX) |
 | `oclive.apiPort` | `8420` | API port |
 | `oclive.rolesDir` | (empty) | Override roles root |
 | `oclive.roleId` | `mumu` | Role folder name |

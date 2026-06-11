@@ -25,6 +25,7 @@ if (!host || host.apiVersion !== HOST_API_VERSION) {
 |------|------|------|
 | `onChatTurnCompleted` | `{ roleId, sessionId, userText, reply, roleName }` | 成功聊天回合（流式/非流式）后 |
 | `onKernelReady` | `{ mode, apiPort }` | 内核 attach/spawn 就绪后 |
+| `onKernelDisconnected` | `{ mode: 'offline', apiPort }` | 内核离线时（**v1.1** · `@oclive/vscode-host` 0.2.0+） |
 
 ---
 
@@ -35,6 +36,7 @@ if (!host || host.apiVersion !== HOST_API_VERSION) {
 | `getEditorContext()` | `{ relativePath?, languageId?, hasSelection, chipLabel }` |
 | `getRolePackPath()` | 有效角色包绝对路径或 `undefined` |
 | `getRecentTurn()` | `{ userText, assistantText }` 或 `undefined` |
+| `getChatHistory(sessionId?, limit?)` | 当前或指定会话的消息列表（**v1.1**） |
 
 ---
 

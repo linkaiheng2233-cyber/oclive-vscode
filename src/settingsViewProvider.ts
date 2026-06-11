@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 
 import { applyUserIdentitySelection, SCENE_ID } from './identityHelper';
+import * as fs from 'fs';
+import * as path from 'path';
 import { getSharedAppDataHint, KernelClient } from './kernelClient';
 import type { KernelResult } from './kernelError';
 import { applyAutoDiscovery, getEffectiveConfig } from './runtimeConfig';
@@ -176,7 +178,142 @@ export class SettingsController {
       case 'navigateSection':
         this.initialSection = msg.section;
         break;
+      case 'loadStorageState':
+        await this.handleLoadStorageState();
+        break;
+      case 'searchStorage':
+        await this.handleSearchStorage(msg.query);
+        break;
+      case 'exportStorage':
+        await this.handleExportStorage(msg);
+        break;
     }
+  }
+
+  private async handleLoadStorageState(): Promise<void> {
+    const eff = getEffectiveConfig();
+    if (!eff.rolesDir) {
+      this.postMessage({
+        type: 'storageState',
+        capabilities: null,
+        sessions: [],
+        error: '请先配置角色库',
+      });
+      return;
+    }
+    const roleId = eff.roleId;
+    const [capsRes, sessions] = await Promise.all([
+      this.kernel.chatStorageProxy<{
+        backend_kind: string;
+        supports_search: boolean;
+        supports_replay: boolean;
+        supports_cleanup: boolean;
+      }>({ op: 'capabilities' }, eff),
+      this.kernel.listChatSessions(roleId, SCENE_ID, eff),
+    ]);
+    this.postMessage({
+      type: 'storageState',
+      capabilities: capsRes.ok
+        ? {
+            backend_kind: capsRes.data.backend_kind,
+            supports_search: capsRes.data.supports_search,
+            supports_replay: capsRes.data.supports_replay,
+            supports_cleanup: capsRes.data.supports_cleanup,
+          }
+        : null,
+      sessions: sessions.map((s) => ({
+        session_id: s.session_id,
+        role_id: s.role_id,
+        scene_id: s.scene_id,
+        updated_at: s.updated_at,
+        message_count: s.message_count,
+        last_message_snippet: s.last_message_snippet,
+      })),
+      error: capsRes.ok ? undefined : capsRes.error,
+    });
+  }
+
+  private async handleSearchStorage(query: string): Promise<void> {
+    const eff = getEffectiveConfig();
+    const res = await this.kernel.chatStorageProxy<
+      Array<{
+        message_id: string;
+        session_id: string;
+        content: string;
+        created_at: string;
+      }>
+    >(
+      {
+        op: 'search_messages',
+        query,
+        role_id: eff.roleId,
+        limit: 20,
+        offset: 0,
+      },
+      eff,
+    );
+    if (!res.ok) {
+      this.postMessage({ type: 'storageSearchResult', hits: [], error: res.error });
+      return;
+    }
+    this.postMessage({
+      type: 'storageSearchResult',
+      hits: res.data.map((h) => ({
+        message_id: h.message_id,
+        session_id: h.session_id,
+        content: h.content,
+        created_at: h.created_at,
+      })),
+    });
+  }
+
+  private async handleExportStorage(
+    msg: Extract<WebviewToHostMessage, { type: 'exportStorage' }>,
+  ): Promise<void> {
+    const eff = getEffectiveConfig();
+    const op =
+      msg.kind === 'session'
+        ? {
+            op: 'export_session' as const,
+            session_id: msg.sessionId ?? '',
+            format: msg.format,
+          }
+        : {
+            op: 'export_role' as const,
+            role_id: eff.roleId,
+            format: msg.format,
+          };
+    const res = await this.kernel.chatStorageProxy<{
+      content: string;
+      suggested_filename: string;
+    }>(op, eff);
+    if (!res.ok) {
+      this.postMessage({ type: 'toast', level: 'error', message: res.error });
+      return;
+    }
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    let targetPath: string | undefined;
+    if (folder) {
+      const dir = path.join(folder.uri.fsPath, '.oclive', 'exports');
+      await fs.promises.mkdir(dir, { recursive: true });
+      targetPath = path.join(dir, res.data.suggested_filename);
+      await fs.promises.writeFile(targetPath, res.data.content, 'utf8');
+    } else {
+      const picked = await vscode.window.showSaveDialog({
+        defaultUri: vscode.Uri.file(res.data.suggested_filename),
+        filters: { Markdown: ['md'], JSON: ['json'] },
+      });
+      if (!picked) {
+        return;
+      }
+      targetPath = picked.fsPath;
+      await fs.promises.writeFile(targetPath, res.data.content, 'utf8');
+    }
+    this.postMessage({
+      type: 'toast',
+      level: 'info',
+      message: `已导出：${targetPath}`,
+    });
   }
 
   private static readonly CONNECTION_KEYS: ReadonlySet<OcliveSettingsKey> = new Set([

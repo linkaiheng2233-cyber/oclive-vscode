@@ -14,6 +14,8 @@ const MODE_LABEL: Record<KernelMode, string> = {
 export class KernelStatusBar {
   private readonly kernelItem: vscode.StatusBarItem;
   private readonly roleItem: vscode.StatusBarItem;
+  private lastMode: KernelMode = 'offline';
+  private onDisconnected?: (port: number) => void;
 
   constructor(private readonly kernel: KernelClient) {
     this.kernelItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
@@ -34,7 +36,15 @@ export class KernelStatusBar {
     this.roleItem.tooltip = '用户身份与后处理状态 · 点击打开设置';
   }
 
+  setOnDisconnected(handler: (port: number) => void): void {
+    this.onDisconnected = handler;
+  }
+
   setMode(mode: KernelMode, port?: number, extensionPath?: string): void {
+    if (this.lastMode !== 'offline' && mode === 'offline' && port != null) {
+      this.onDisconnected?.(port);
+    }
+    this.lastMode = mode;
     const info = this.kernel.getConnectionInfo();
     const icon =
       mode === 'attached'

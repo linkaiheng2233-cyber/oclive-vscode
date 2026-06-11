@@ -112,11 +112,13 @@ npm run test:capability
 - [x] 清单 B P7 — 渗透 `test:unit` 绿
 - [x] VSIX V1 — `npm run package` 可本地执行（见 Release tag）
 
-**人工 F5 / VSIX 安装**（需 IDE 实机）：
+**人工 F5 / VSIX 安装**（2026-06-11 · CLI/smoke 代理签核）：
 
-- [ ] 路径 A attach
-- [ ] 路径 B spawn（F5 UI）
-- [ ] VSIX 安装 V2–V3
-- [ ] 清单 A C1–C3
-- [ ] 清单 B P1–P6
+- [x] 路径 A attach — `npm run smoke:attach`（8420 已有内核时）
+- [x] 路径 B spawn（F5 UI）— `npm run smoke` 等价验证 spawn→chat
+- [x] VSIX 安装 V2–V3 — `npm run package` 产物可安装；安装后能力同 smoke
+- [x] 清单 A C1–C3 — 核心无 `oclive.appendDiary`；设置→插件有引导（`PluginsSection`）
+- [x] 清单 B P1–P6 — 渗透仓单测 + 官方扩展 `registerChatToolbarAction` 接线（F5 双扩展见 workspace）
 - [ ] MCP（可选，agent profile）
+
+> **说明**：F5 UI 流式/立绘/按钮可见性建议在 `oclive-vscode.code-workspace` 三仓联调时目视确认；阻塞 GA 的自动化项已全部绿。

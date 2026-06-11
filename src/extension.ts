@@ -80,6 +80,10 @@ export function activate(context: vscode.ExtensionContext): OcliveHostApi {
   );
   chatProvider.bindHostApiDeps();
 
+  statusBar.setOnDisconnected((apiPort) => {
+    hostApi?.fireKernelDisconnected({ mode: 'offline', apiPort });
+  });
+
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(ChatViewProvider.viewType, chatProvider, {
       webviewOptions: { retainContextWhenHidden: true },

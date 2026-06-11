@@ -89,6 +89,16 @@ Breaking → npm major + 文档 + 核心/官方插件同步 bump。
 
 ---
 
+## 从样例 fork
+
+1. 复制 [`oclive-vscode-host/examples/minimal-penetration/`](../../oclive-vscode-host/examples/minimal-penetration/) 到新目录
+2. 修改 `package.json` 的 `name` / `publisher` / 命令前缀（**勿**使用 `oclive-penetration.*`，该前缀保留给官方插件）
+3. `npm install @oclive/vscode-host@^0.2.0`
+4. 打开 [`oclive-vscode.code-workspace`](../oclive-vscode.code-workspace) 三仓工作区，F5 本扩展 + 核心
+5. 聊一轮 → 确认 `notes/whisper.md`（或你自定义路径）已追加
+
+本地联调可将依赖改为 `"file:../oclive-vscode-host"`；发版前改回 registry。
+
 ## 样例
 
-最小第三方扩展见 [`oclive-vscode-host/examples/minimal-penetration/`](../../oclive-vscode-host/examples/minimal-penetration/README.md)。
+最小第三方扩展见 [`oclive-vscode-host/examples/minimal-penetration/README.md`](../../oclive-vscode-host/examples/minimal-penetration/README.md)。

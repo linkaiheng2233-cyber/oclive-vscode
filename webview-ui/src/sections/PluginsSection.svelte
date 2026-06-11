@@ -3,6 +3,10 @@
   const PENETRATION_EXT_ID = 'oclive.oclive-vscode-penetration';
   const MIGRATION_DOC =
     'https://github.com/linkaiheng2233-cyber/oclive-vscode/blob/main/docs/MIGRATION_0.3_to_0.4.md';
+  const CORE_RELEASE =
+    'https://github.com/linkaiheng2233-cyber/oclive-vscode/releases';
+  const PENETRATION_RELEASE =
+    'https://github.com/linkaiheng2233-cyber/oclive-vscode-penetration/releases';
 </script>
 
 <h2 class="title">插件</h2>
@@ -21,7 +25,11 @@
     命令前缀为 <code>oclive-penetration.*</code>（0.4 起无旧命令 shim）。
   </p>
   <p>
-    <a href={MIGRATION_DOC} target="_blank" rel="noopener">0.3 → 0.4 迁移说明</a>
+    <a href={CORE_RELEASE} target="_blank" rel="noopener">核心 Release</a>
+    ·
+    <a href={PENETRATION_RELEASE} target="_blank" rel="noopener">渗透插件 Release</a>
+    ·
+    <a href={MIGRATION_DOC} target="_blank" rel="noopener">0.3 → 0.4 迁移</a>
   </p>
 </div>
 

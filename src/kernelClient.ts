@@ -747,6 +747,32 @@ export class KernelClient {
     return result;
   }
 
+  async chatStorageProxy<T = unknown>(
+    op: Record<string, unknown>,
+    config: OcliveConfig = cfg(),
+  ): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
+    await this.ensureReady(config);
+    try {
+      const res = await fetch(`${apiBase(config)}/chat/storage`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(op),
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: { message?: string };
+        };
+        return { ok: false, error: body.error?.message ?? `HTTP ${res.status}` };
+      }
+      const data = (await res.json()) as T;
+      return { ok: true, data };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { ok: false, error: msg };
+    }
+  }
+
   async chatStorage(
     op: ChatStorageOp,
     config: OcliveConfig = cfg(),

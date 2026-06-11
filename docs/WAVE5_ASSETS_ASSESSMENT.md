@@ -22,7 +22,7 @@
 
 **阻塞**：无；VS Code 扩展已读 `assets/images/{tag}.png`（`rolePack.ts`）。
 
-**本波交付**：评估文档 + 保留现有 Control；网格 UI 列入 pack-editor M1 首个 PR。
+**本波交付**：pack-editor M1 网格 UI **已合并**（`EmotionAssetsControl.vue`）；vscode-lite 契约见 `oclive-pack-editor/docs/VSCODE_LITE_EXPORT.md`。
 
 ---
 

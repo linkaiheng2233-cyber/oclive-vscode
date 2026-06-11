@@ -2,6 +2,14 @@
 
 **适用**：`oclive.oclive-vscode` 核心扩展 0.4.0+
 
+## Release 下载
+
+| 产物 | 版本 | 链接 |
+|------|------|------|
+| 核心 VSIX | 0.4.1+ | [oclive-vscode Releases](https://github.com/linkaiheng2233-cyber/oclive-vscode/releases) |
+| 官方渗透 VSIX | 0.1.1+ | [oclive-vscode-penetration Releases](https://github.com/linkaiheng2233-cyber/oclive-vscode-penetration/releases) |
+| 宿主 API npm | 0.2.0+ | [@oclive/vscode-host](https://www.npmjs.com/package/@oclive/vscode-host) |
+
 ---
 
 ## 概要

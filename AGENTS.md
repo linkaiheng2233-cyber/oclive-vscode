@@ -12,6 +12,7 @@ OCLive VS Code 扩展。**以角色为基点**（不是 Cursor）；产品战略
 - [`ROADMAP.md`](ROADMAP.md) — 里程碑
 - [`../oclivenewnew/creator-docs/role-pack/CROSS_HOST_MEMORY.md`](../oclivenewnew/creator-docs/role-pack/CROSS_HOST_MEMORY.md)
 - 主仓 [`../oclivenewnew/AGENTS.md`](../oclivenewnew/AGENTS.md)
+- 内核 spawn / attach SSOT：主仓 [`KERNEL_SCHEDULER_RESCOPE.md`](../oclivenewnew/handoff/KERNEL_SCHEDULER_RESCOPE.md) · [`DISTRO_KERNEL_LIFECYCLE.md`](../oclivenewnew/creator-docs/kernel/DISTRO_KERNEL_LIFECYCLE.md)
 
 **实现纪律**：
 
