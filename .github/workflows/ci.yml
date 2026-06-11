@@ -29,17 +29,34 @@ jobs:
           repository: linkaiheng2233-cyber/oclive-vscode-host
           path: oclive-vscode-host
           ref: main
+      - uses: actions/checkout@v4
+        with:
+          repository: oclive-app/oclivenewnew
+          path: oclivenewnew
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
           cache-dependency-path: oclive-vscode/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: oclivenewnew
       - name: Build @oclive/vscode-host
         run: cd ../oclive-vscode-host && npm ci && npm run build
+      - name: Build oclive-kernel-server and oclive-cli
+        working-directory: oclivenewnew
+        run: cargo build -p oclive_kernel_server -p oclive-cli
       - run: npm ci
       - run: npm run compile:all
       - run: npm run lint
-      - run: npm run smoke
+      - name: Smoke (spawn → chat)
+        env:
+          OCLIVE_ROLES_DIR: ${{ github.workspace }}/oclivenewnew/roles
+        run: |
+          TARGET="$(cd ../oclivenewnew && cargo metadata --format-version=1 --no-deps | python -c "import json,sys; print(json.load(sys.stdin)['target_directory'])")"
+          export OCLIVE_KERNEL_BINARY="$TARGET/debug/oclive-kernel-server"
+          npm run smoke
       - run: npm run test:unit
       - run: npm run test:capability
       - run: npm run test:ensure-report

@@ -10,9 +10,10 @@ const PORT = Number(process.env.OCLIVE_API_PORT || 8420);
 const BASE = `http://127.0.0.1:${PORT}`;
 const ROLES_DIR = resolve(process.env.OCLIVE_ROLES_DIR || join('..', 'oclivenewnew', 'roles'));
 const ROLE_PATH = join(ROLES_DIR, 'mumu');
+const suffix = process.platform === 'win32' ? '.exe' : '';
 const KERNEL = resolve(
   process.env.OCLIVE_KERNEL_BINARY ||
-    '../oclive-dev-artifacts/oclivenewnew-cargo-target/debug/oclive-kernel-server.exe',
+    join('..', 'oclive-dev-artifacts', 'oclivenewnew-cargo-target', 'debug', `oclive-kernel-server${suffix}`),
 );
 
 async function health() {
