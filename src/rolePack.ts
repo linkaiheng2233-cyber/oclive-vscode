@@ -146,6 +146,74 @@ export function listRoleIds(rolesDir: string, allowlist?: string[]): string[] {
   return out.sort();
 }
 
+/** Resolve catalog asset path by `visual_state_id` (image-only; VS Code uses PNG/WebP hero). */
+export function resolveCatalogAssetPath(
+  rolePackDir: string,
+  visualStateId: string,
+): string | undefined {
+  const catalogPath = path.join(rolePackDir, 'portrait_catalog.json');
+  if (!fs.existsSync(catalogPath)) {
+    return undefined;
+  }
+  try {
+    const raw = JSON.parse(fs.readFileSync(catalogPath, 'utf8')) as {
+      assets?: Array<{ id?: string; path?: string }>;
+    };
+    const asset = raw.assets?.find((a) => a.id === visualStateId);
+    const rel = asset?.path?.trim();
+    if (!rel) {
+      return undefined;
+    }
+    const full = path.join(rolePackDir, rel.replace(/\\/g, '/'));
+    return fs.existsSync(full) ? full : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function resolvePackRelativeImage(rolePackDir: string, relPath: string): string | undefined {
+  const full = path.join(rolePackDir, relPath.replace(/\\/g, '/'));
+  return fs.existsSync(full) ? full : undefined;
+}
+
+/** Resolved absolute portrait asset path for sidebar hero (alias: `portraitAssetPath`). */
+export function resolvePortraitAssetPath(
+  rolePackDir: string,
+  emotion: string,
+  visualStateId?: string,
+  directive?: { path?: string | null; fallback_image?: string | null },
+): string | undefined {
+  return resolvePortraitImagePath(rolePackDir, emotion, visualStateId, directive);
+}
+
+/** Catalog / directive path first, then legacy emotion tag filenames. */
+export function resolvePortraitImagePath(
+  rolePackDir: string,
+  emotion: string,
+  visualStateId?: string,
+  directive?: { path?: string | null; fallback_image?: string | null },
+): string | undefined {
+  if (directive?.path) {
+    const fromPath = resolvePackRelativeImage(rolePackDir, directive.path);
+    if (fromPath) {
+      return fromPath;
+    }
+  }
+  if (directive?.fallback_image) {
+    const fromFallback = resolvePackRelativeImage(rolePackDir, directive.fallback_image);
+    if (fromFallback) {
+      return fromFallback;
+    }
+  }
+  if (visualStateId) {
+    const fromCatalog = resolveCatalogAssetPath(rolePackDir, visualStateId);
+    if (fromCatalog) {
+      return fromCatalog;
+    }
+  }
+  return resolveEmotionImagePath(rolePackDir, emotion);
+}
+
 /** First existing file under `assets/images/`, or undefined. */
 export function resolveEmotionImagePath(rolePackDir: string, emotion: string): string | undefined {
   const dir = path.join(rolePackDir, 'assets', 'images');

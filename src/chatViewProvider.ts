@@ -9,7 +9,7 @@ import {
   readMetaActionTemplates,
   readRoleDisplayName,
   readSceneWelcome,
-  resolveEmotionImagePath,
+  resolvePortraitAssetPath,
   type MetaActionTemplates,
   type RoleOption,
 } from './rolePack';
@@ -605,14 +605,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     };
   }
 
-  private refreshPortraitForCurrentRole(emotion?: string): void {
+  private refreshPortraitForCurrentRole(
+    emotion?: string,
+    visualStateId?: string,
+    directive?: { path?: string | null; fallback_image?: string | null },
+  ): void {
     const config = getEffectiveConfig();
     if (!config.rolesDir) {
       return;
     }
     this.updateWebviewRoots();
     const pack = rolePackPath(config);
-    this.setPortraitEmotion(emotion ?? this.portraitEmotion, pack);
+    this.setPortraitEmotion(emotion ?? this.portraitEmotion, pack, visualStateId, directive);
   }
 
   private async bootstrap(): Promise<void> {
@@ -806,11 +810,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     return sid;
   }
 
-  private setPortraitEmotion(emotion: string, rolePackDir: string): void {
+  private setPortraitEmotion(
+    emotion: string,
+    rolePackDir: string,
+    visualStateId?: string,
+    directive?: { path?: string | null; fallback_image?: string | null },
+  ): void {
     const key = normalizeEmotionKey(emotion);
     this.portraitEmotion = key;
     this.portraitEmoji = emotionEmoji(key);
-    const imgPath = resolveEmotionImagePath(rolePackDir, key);
+    const imgPath = resolvePortraitAssetPath(rolePackDir, key, visualStateId, directive);
     if (imgPath && this.view) {
       const uri = vscode.Uri.file(imgPath);
       this.portraitWebviewSrc = this.view.webview.asWebviewUri(uri).toString();
@@ -1130,6 +1139,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       sessionId?: string;
       botEmotion?: string;
       portraitEmotion?: string;
+      visualStateId?: string;
+      performanceDirective?: { path?: string | null; fallback_image?: string | null };
       replyIsFallback?: boolean;
       llmFallbackReason?: string;
       userMessageId?: string;
@@ -1145,7 +1156,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
     this.statusBar.syncFromClient(config.apiPort, config.extensionPath);
     const emotion = result.portraitEmotion || result.botEmotion || 'neutral';
-    this.refreshPortraitForCurrentRole(emotion);
+    this.refreshPortraitForCurrentRole(
+      emotion,
+      result.visualStateId,
+      result.performanceDirective,
+    );
     const userLine = this.lines[userLineIndex];
     if (userLine && result.userMessageId) {
       userLine.id = result.userMessageId;

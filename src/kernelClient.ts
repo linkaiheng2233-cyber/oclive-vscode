@@ -23,6 +23,7 @@ import { ensureReadyDecision } from './ensureReadyPolicy';
 import { parseKernelErrorResponse, type KernelResult } from './kernelError';
 import type { LlmUserSettings, SaveLlmUserSettingsRequest } from './types/llmSettings';
 import type { RoleInfo } from './types/roleInfo';
+import { parsePerformanceDirective, type PerformanceDirective } from './types/visualPresentation';
 
 export type { KernelErrorPayload, KernelResult } from './kernelError';
 export { KernelApiError, parseKernelErrorResponse } from './kernelError';
@@ -105,6 +106,10 @@ export interface ChatSuccess {
   personalitySource?: string;
   botEmotion?: string;
   portraitEmotion?: string;
+  visualStateId?: string;
+  performanceDirective?: PerformanceDirective;
+  /** Absolute path when directive/catalog resolves on disk (sidebar hero). */
+  portraitAssetPath?: string;
   /** Main dialogue LLM failed; reply is an emergency fallback string. */
   replyIsFallback?: boolean;
   llmFallbackReason?: string;
@@ -547,6 +552,9 @@ export class KernelClient {
       botEmotion: typeof body.bot_emotion === 'string' ? body.bot_emotion : undefined,
       portraitEmotion:
         typeof body.portrait_emotion === 'string' ? body.portrait_emotion : undefined,
+      visualStateId:
+        typeof body.visual_state_id === 'string' ? body.visual_state_id : undefined,
+      performanceDirective: parsePerformanceDirective(body.performance_directive),
       replyIsFallback,
       llmFallbackReason,
       userMessageId:
@@ -710,6 +718,11 @@ export class KernelClient {
         typeof donePayload.portrait_emotion === 'string'
           ? donePayload.portrait_emotion
           : undefined,
+      visualStateId:
+        typeof donePayload.visual_state_id === 'string'
+          ? donePayload.visual_state_id
+          : undefined,
+      performanceDirective: parsePerformanceDirective(donePayload.performance_directive),
       replyIsFallback: donePayload.reply_is_fallback === true,
       llmFallbackReason:
         typeof donePayload.llm_fallback_reason === 'string'
