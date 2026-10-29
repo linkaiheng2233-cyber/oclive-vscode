@@ -1,104 +1,61 @@
-# oclive-vscode
+# OCLive for VS Code
 
-VS Code extension for [OCLive](https://github.com/linkaiheng2233-cyber/oclivenewnew): chat with role packs via **`kernel_server --api`**.
+**在 VS Code 中运行角色聊天，把日记、来信等伴随功能交给可选插件。**
 
-Phase 1 contract: [CROSS_HOST_MEMORY.md](https://github.com/linkaiheng2233-cyber/oclivenewnew/blob/main/creator-docs/role-pack/CROSS_HOST_MEMORY.md).
+A role-chat Host for [A.I.Live / OCLive](https://github.com/linkaiheng2233-cyber/oclivenewnew), with a separate Host API for companion plugins.
 
-## Install（两步 · 0.4+）
+## 安装与版本
 
-| 步骤 | 产物 | 获取方式 |
-|------|------|----------|
-| **1 · 核心** | `oclive.oclive-vscode` | [GitHub Release v0.4.1](https://github.com/linkaiheng2233-cyber/oclive-vscode/releases) 下载 `.vsix` → VS Code「从 VSIX 安装」 |
-| **2 · 渗透（可选）** | `oclive.oclive-vscode-penetration` | [GitHub Release v0.1.1](https://github.com/linkaiheng2233-cyber/oclive-vscode-penetration/releases) 下载 `.vsix` |
+1. 从[公开发布 v0.4.0](https://github.com/linkaiheng2233-cyber/oclive-vscode/releases/tag/v0.4.0)获取核心扩展 `.vsix`，在 VS Code 的扩展菜单中选择“从 VSIX 安装”。
+2. 按[发行版说明](docs/VSCODE_DISTRIBUTION.md)准备可用的角色包、兼容运行时和模型后端。
+3. 打开 **OCLive: Open Chat**；需要时使用 Setup、Select Role 和 Select User Identity。
 
-- **仅装核心**：聊天、流式、历史、身份、模型 — 正常；**无**日记/写信按钮（见 [`docs/MIGRATION_0.3_to_0.4.md`](docs/MIGRATION_0.3_to_0.4.md)）
-- **插件作者**：npm [`@oclive/vscode-host`](https://www.npmjs.com/package/@oclive/vscode-host) ^0.2.0
+默认分支源码版本为 **0.4.1**，现有公开 VSIX 为 **0.4.0**。源码版本与已经上传的安装包分别核对，不能按 README 中的源码号推断存在同名 Release。
 
-## Zero-config (default)
+## 核心与可选插件
 
-With **`oclive.autoDiscover`** (default `true`), the extension finds paths without manual pickers:
+核心扩展 `oclive.oclive-vscode` 负责聊天、历史、身份选择与 Host API。日记／来信等工作区伴随功能在独立的 [oclive-vscode-penetration](https://github.com/linkaiheng2233-cyber/oclive-vscode-penetration) 中维护，按需要安装；迁移说明见 [0.3 → 0.4](docs/MIGRATION_0.3_to_0.4.md)。
 
-| Resource | Discovery order |
-|----------|-----------------|
-| **roles** | `OCLIVE_ROLES_DIR` → workspace `roles/` → sibling `oclivenewnew/roles` |
-| **kernel spawn** | `OCLIVE_KERNEL_BINARY` pin → settings → **extension `bin/` bundled** → **`%LOCALAPPDATA%\OCLive\runtime\`** (shared fallback) → dev `oclivenewnew-tauri` / `oclive-kernel-server` |
+扩展通过兼容的本地参考运行时工作。发现路径、attach / spawn 与共享运行时回退的具体规则见[发行版文档](docs/VSCODE_DISTRIBUTION.md)及 [bin/README.md](bin/README.md)。配置成功不等于本机已经具备可用模型或运行时二进制。
 
-**Single writer on `:8420`**: if desktop or another host already serves `/health` with a **profile-compatible** kernel, the extension **attaches** and does not spawn.
+## 从源码开发
 
-**Product target (SSOT):** spawn **this distro's bundled** kernel first; on failure, retry **shared runtime** with the same `OCLIVE_APP_DATA` / `OCLIVE_DISTRO_PROFILE` / `OCLIVE_ROLES_DIR` (plugins reuse). See main repo [KERNEL_SCHEDULER_RESCOPE.md](https://github.com/linkaiheng2233-cyber/oclivenewnew/blob/main/handoff/KERNEL_SCHEDULER_RESCOPE.md).
+本仓依赖 [oclive-vscode-host](https://github.com/linkaiheng2233-cyber/oclive-vscode-host) 的同级源码目录。先按该仓说明构建契约包，再在本仓执行：
 
-**Dev only:** when `oclive.promoteSharedKernel` is on and a local dev build scores ≥ promote threshold, it may be copied to shared runtime — **maintenance path**, not the default end-user story. **`binary_upgrade` auto-replace of a healthy kernel is Freeze.**
-
-## Behaviour
-
-- **`GET /health` on port 8420** → attach (no second process).
-- Health fails → spawn per shared policy (`oclive-cli kernel ensure` when available): **bundled → shared fallback** (primary product path), then dev overrides.
-- Chat uses **`scene_id=vscode`**, own **`session_id`**, demo role **`mumu`**.
-- Sidebar: portrait from `roles/{id}/assets/images/` + chat; welcome from `scenes/vscode/scene.json`.
-- **User identity**: command **OCLive: Select User Identity** (or tag in chat webview).
-
-**Penetration (diary, letters, `.oclive/` writes)** — **0.4+ separate extension** [`oclive-vscode-penetration`](../oclive-vscode-penetration). Core = chat platform + [`@oclive/vscode-host`](../oclive-vscode-host) API. See [`docs/MIGRATION_0.3_to_0.4.md`](docs/MIGRATION_0.3_to_0.4.md).
-
-## Commands (core)
-
-| Command | Action |
-|---------|--------|
-| **OCLive: Open Chat** | Focus sidebar |
-| **OCLive: Setup** | Re-run auto-discovery |
-| **OCLive: Select Role** | Pick role folder |
-| **OCLive: Select User Identity** | Switch identity template |
-| **OCLive: Reconnect Kernel** | Refresh attach/spawn |
-| **OCLive: List MCP Servers (Advanced)** | VS-4 · see `docs/VS4_AGENT.md` |
-
-**Penetration commands** (`Append to Diary`, etc.) — **0.3.x only in core**; moving to plugin. See roadmap.
-
-Roadmap: [ROADMAP.md](./ROADMAP.md).
-
-## Offline / bundled kernel
-
-When auto-discovery finds no dev build and nothing listens on `:8420`, the extension can spawn a copy from **`bin/`** (not committed to git). Generate it once:
-
-```powershell
-cd D:\oclive-vscode
-.\scripts\bundle-kernel.ps1
+```bash
+npm ci
+npm run compile:all
+npm run test:unit
+npm run package
 ```
 
-See [bin/README.md](./bin/README.md) for placement and fallback order.
+`package` 会构建并生成 VSIX。运行时二进制的准备方式在 [bin/README.md](bin/README.md)，不由纯 TypeScript 编译代替。
 
-## Develop
+## 给插件作者
 
-```powershell
-cd D:\oclive-vscode
-npm install
-npm run compile
-```
+- [Host API 文档](docs/HOST_API_V1.md)
+- [源码契约包](https://github.com/linkaiheng2233-cyber/oclive-vscode-host)：当前按 `file:` 依赖使用，npm 发布另行安排。
+- [官方伴随插件](https://github.com/linkaiheng2233-cyber/oclive-vscode-penetration)：日记、来信和闲时表达的消费示例。
 
-Open folder **`oclivenewnew`** or a parent that contains it, press **F5** → **OCLive** activity bar → **Chat**. No settings required if dev kernel and `roles/mumu` exist.
+可选插件扩展 Host 的能力，不改变 OCLive 六槽或参考运行时编排。
 
-### Bundle fallback kernel (optional, for VSIX)
+## 文档与反馈
 
-```powershell
-.\scripts\bundle-kernel.ps1
-```
+[路线图](ROADMAP.md) · [发行版说明](docs/VSCODE_DISTRIBUTION.md) · [Issue](https://github.com/linkaiheng2233-cyber/oclive-vscode/issues)
 
-### Local smoke (CLI)
+跨宿主连续性以主仓[现行说明](https://github.com/linkaiheng2233-cyber/oclivenewnew/blob/main/creator-docs/role-pack/CROSS_HOST_MEMORY.md)为准。源码包的许可声明见 [package.json](package.json)。
 
-```powershell
-npm run smoke
-npm run smoke:attach   # with kernel already on 8420
-```
 
-## Settings
+<!-- Preserve previously published section bookmarks. -->
+<a id="oclive-vscode"></a>
+<a id="install两步--04"></a>
+<a id="zero-config-default"></a>
+<a id="behaviour"></a>
+<a id="commands-core"></a>
+<a id="offline--bundled-kernel"></a>
+<a id="develop"></a>
+<a id="bundle-fallback-kernel-optional-for-vsix"></a>
+<a id="local-smoke-cli"></a>
+<a id="settings"></a>
 
-| Key | Default | Description |
-|-----|---------|-------------|
-| `oclive.autoDiscover` | `true` | Auto-find roles + kernel |
-| `oclive.promoteSharedKernel` | `true` | **Dev:** copy local full build to shared runtime (maintenance; not default UX) |
-| `oclive.apiPort` | `8420` | API port |
-| `oclive.rolesDir` | (empty) | Override roles root |
-| `oclive.roleId` | `mumu` | Role folder name |
-| `oclive.kernelBinary` | (empty) | Override spawn binary |
-| `oclive.includeEditorContext` | `true` | File/selection prefix |
-| `oclive.mockLlm` | `false` | Mock LLM when spawning |
-
-Status bar: **attach / spawn / offline**; when a role is loaded, a second item shows **identity · post-process** (read-only).
+旧版章节书签保留在此。[整理前的首页](https://github.com/linkaiheng2233-cyber/oclive-vscode/blob/0eed3e4250f484e47831ac050d249c011f9b4818/README.md)可用于查阅历史说明；现行入口以本页与所链文档为准。
