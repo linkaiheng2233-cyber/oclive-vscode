@@ -20,6 +20,8 @@ A role-chat Host for [A.I.Live / OCLive](https://github.com/linkaiheng2233-cyber
 
 ## 从源码开发
 
+**当前源码构建有阻塞。** 2026-10-29 的 [CI](https://github.com/linkaiheng2233-cyber/oclive-vscode/actions/workflows/ci.yml)在 TypeScript 编译时报告 `@oclive/vscode-host` 未导出 `ChatHistoryEntry` 和 `KernelDisconnectedEvent`；Webview 安装日志也报告了依赖审计问题。下面是仓库约定的开发命令，修复并重新验证前不应将其视为已经通过的打包流程。公开 VSIX 仍以此前发布的 0.4.0 附件为准。
+
 本仓依赖 [oclive-vscode-host](https://github.com/linkaiheng2233-cyber/oclive-vscode-host) 的同级源码目录。先按该仓说明构建契约包，再在本仓执行：
 
 ```bash
@@ -29,13 +31,13 @@ npm run test:unit
 npm run package
 ```
 
-`package` 会构建并生成 VSIX。运行时二进制的准备方式在 [bin/README.md](bin/README.md)，不由纯 TypeScript 编译代替。
+`package` 是构建并生成 VSIX 的脚本；须先解决上述源码构建阻塞。运行时二进制的准备方式在 [bin/README.md](bin/README.md)，不由纯 TypeScript 编译代替。
 
 ## 给插件作者
 
 - [Host API 文档](docs/HOST_API_V1.md)
 - [源码契约包](https://github.com/linkaiheng2233-cyber/oclive-vscode-host)：当前按 `file:` 依赖使用，npm 发布另行安排。
-- [官方伴随插件](https://github.com/linkaiheng2233-cyber/oclive-vscode-penetration)：日记、来信和闲时表达的消费示例。
+- [官方伴随插件](https://github.com/linkaiheng2233-cyber/oclive-vscode-penetration)：日记、来信和闲时提醒的消费示例。
 
 可选插件扩展 Host 的能力，不改变 OCLive 六槽或参考运行时编排。
 
