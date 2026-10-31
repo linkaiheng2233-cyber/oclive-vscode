@@ -29,3 +29,5 @@ npm run test:ensure-report
 ```
 
 主仓 CI 的 `kernel_ensure_plan_snapshot` 为强制门禁；本仓 CI **不**构建 `oclive-cli`，请开发者手动跑上述脚本。
+
+**开发流水线**：先读主仓跟踪的[通用流水线](../oclivenewnew/handoff/workflows/dev-pipeline/SKILL.md)，再读 [OCLive 定制层](../oclivenewnew/.cursor/skills/oclive-dev-pipeline/SKILL.md)；本机安装副本不代替仓库规则。

@@ -1,4 +1,4 @@
-# OCLive VS Code · 长期 Deferred（Wave 5）
+# OCLive VS Code · 暂缓事项
 
 **基线**：0.4.x GA 之后不纳入 semver 承诺；立项前见 [`ROADMAP.md`](../ROADMAP.md)。
 
@@ -17,7 +17,6 @@
 |----|------|------|
 | **目录插件 RPC 渗透** | 与桌面 `directory-plugin-minimal` 对齐；可替代或补充 VS Code 扩展插件 | Deferred |
 | **插件市场站索引渗透扩展** | `oclive-plugin-market` 产品化阶段再接入 | Deferred |
-| **核心 0.5 删过渡文档** | 内置渗透已在 0.4 移除；ROADMAP「删 penetration/」改为 **Cancelled** | Deferred |
 
 ## 产品
 
