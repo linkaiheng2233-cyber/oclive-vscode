@@ -9,10 +9,10 @@
 
 | 路径 | `skip_agent` | 适用 |
 |------|--------------|------|
-| **默认** `distro.oclive.toml` | `true` | 聊天 + 宿主导编排渗透（日记、`.oclive/`） |
+| **默认** `distro.oclive.toml` | `true` | 轻量聊天宿主；日记等由另装的可选渗透插件提供 |
 | **高级** `vscode-agent.oclive.toml` | `false` | 愿意承担 MCP / 多步工具风险的用户 |
 
-解冻 Agent **不替代** VS-2「记入日记」按钮；两者可并存。
+启用 Agent **不替代**可选渗透插件；两者可并存，默认扩展不因此获得 Agent 入口。
 
 ---
 
@@ -42,7 +42,7 @@
   - `transport=http` → `network:*`  
   - `transport=stdio` → `process:spawn`
 
-完整 `call_mcp_tool` 环仍依赖内核 Agent 槽；VS Code 侧在 **agent profile** 下提供 QuickPick + Output（`GET/POST /mcp/*`，见主仓 [`VSCODE_MCP_HTTP_GATE.md`](../../oclivenewnew/handoff/VSCODE_MCP_HTTP_GATE.md)）。
+完整 `call_mcp_tool` 环仍依赖内核 Agent 槽；VS Code 侧在 **agent profile** 下提供 QuickPick + Output（`GET/POST /mcp/*`）。当前 profile 边界见主仓[发行版默认插件](../../oclivenewnew/creator-docs/kernel/DISTRO_DEFAULT_PLUGINS.md)，Agent 接入语义见 [AGENT_REMOTE_PROTOCOL](../../oclivenewnew/creator-docs/plugin-and-architecture/AGENT_REMOTE_PROTOCOL.md)。
 
 ---
 

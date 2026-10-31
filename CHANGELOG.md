@@ -46,7 +46,7 @@ All notable changes to the OCLive VS Code extension are documented here.
 - **渗透 v2**：`letters/` 写信 · `revealOcliveFolder` · 每 N 轮记入日记**提示** · idle/终端角色化文案
 - **创作者**：主仓 `penetration_templates` validation · `.oclive/config.json` 合并链 · [`CREATOR_VSCODE_PACK.md`](docs/CREATOR_VSCODE_PACK.md)
 - **VS-4**：内核 `/mcp/servers|tools|call` · 扩展 MCP QuickPick（**默认 profile 无入口**）
-- **文档**：[[历史记录：WAVE5_ASSETS_ASSESSMENT.md](https://github.com/linkaiheng2233-cyber/oclive-vscode/blob/84e202caa9412b0443e1ad503538905b7c0f1253/docs/WAVE5_ASSETS_ASSESSMENT.md)](https://github.com/linkaiheng2233-cyber/oclive-vscode/blob/84e202caa9412b0443e1ad503538905b7c0f1253/docs/WAVE5_ASSETS_ASSESSMENT.md)
+- **文档**：[历史记录：WAVE5_ASSETS_ASSESSMENT.md](https://github.com/linkaiheng2233-cyber/oclive-vscode/blob/84e202caa9412b0443e1ad503538905b7c0f1253/docs/WAVE5_ASSETS_ASSESSMENT.md)
 
 ### Changed
 

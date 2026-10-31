@@ -13,7 +13,7 @@
 | **VS-2P** 渗透插件化 | 日记+信+idle 等 **独立插件**；核心宿主 API | **Done**（0.4.0） |
 | **VS-3P** 渗透生态 | 第三方样例 · 核心默认无内置渗透 | **Done**（0.4.1 · Open VSX 见 Deferred） |
 | **VS-4** 可选 Agent | MCP HTTP + QuickPick（高级 profile） | **Done**（0.3.2 · 默认无入口） |
-| **0.4 波次 5** | pack-editor 情绪图 · vscode-lite 导出 | **In progress**（0.5 规划） |
+| **角色立绘与导出** | 编写器能力与宿主展示边界分别维护 | 见[编写器当前说明](../oclive-pack-editor/creator-docs/ROLE_PACK_EDITOR.md)及[导出配置](../oclive-pack-editor/docs/VSCODE_LITE_EXPORT.md) |
 
 **0.3.x 内置渗透（原 VS-2/VS-3）**：**Done 但 deprecated** — 迁移目标见 [`PENETRATION_PLUGIN_MODEL.md`](docs/PENETRATION_PLUGIN_MODEL.md) §5。
 
@@ -40,7 +40,7 @@
 | 功能 parity | 从 `src/penetration/*` 迁出：日记 · 信 · idle · 终端 · C2 | **Done** |
 | 核心 deprecated | 内置渗透标记过渡；设置页引导安装插件 | **Done** |
 | 核心默认 | 无内置渗透命令（0.4.0 Breaking） | **Done** |
-| 核心移除 | 删除内置 `penetration/`（0.5.0） | **Planned** |
+| 核心移除 | `src/penetration/*` 已在 0.4.0 移除，见 [CHANGELOG](CHANGELOG.md) | 不再作为 0.5 待实施项 |
 
 **原则**：日记与写信 **同一插件包**；核心 **不** 再扩展新的内置渗透功能。
 
